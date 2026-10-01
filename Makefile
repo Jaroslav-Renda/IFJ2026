@@ -11,6 +11,7 @@
 
 CC=gcc
 CFLAGS= -pedantic -Wall -Wextra -g -O0 -std=c23
+HEADERS = $(wildcard *.h)
 SRC= $(wildcard *.c)
 OBJ= $(SRC:.c=.o)
 
@@ -24,6 +25,22 @@ check: *.c
 	else \
 		echo "Warning: cppcheck is not installed";\
 	fi
+	
+	@if command -v clang-tidy >/dev/null 2>&1; then \
+		echo "Starting clang-tidy..."; \
+		clang-tidy $(SRC) -- $(CFLAGS); \
+	else \
+		echo "Warning: clang-tidy is not installed"; \
+	fi
+
+format:
+	@if command -v clang-format >/dev/null 2>&1; then \
+		echo "Formatting files..."; \
+		clang-format -i --verbose $(SRC) $(HEADERS); \
+	else \
+		echo "Warning: clang-format is not installed"; \
+	fi
+
 build-check: check build
 
 test: 
