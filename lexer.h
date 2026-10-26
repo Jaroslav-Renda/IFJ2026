@@ -40,7 +40,7 @@ typedef enum {
     TOKEN_EQUAL_TO,
     TOKEN_NOT_EQUAL_TO,
     TOKEN_INDENT,
-    TOKEN_DEDENT
+    TOKEN_DEDENT,
 } tokenType;
 
 /**
@@ -68,7 +68,7 @@ typedef enum {
     KEYWORD_FOR,
     KEYWORD_LIST,
     KEYWORD_MATCH,
-    KEYWORD_TYPE
+    KEYWORD_TYPE,
 } keyword;
 /**
  * @brief struct representing a token
