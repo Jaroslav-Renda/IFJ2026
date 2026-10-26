@@ -1,0 +1,154 @@
+name: check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: check-${{ github.event.workflow_run.head_branch || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  clang-format:
+    name: clang-format
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+
+    env:
+      LLVM_VERSION: "23"
+      SUITE: noble
+      FORMAT: clang-format-23
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Add apt.llvm.org repository
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key \
+            | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+          REPO="deb http://apt.llvm.org/${SUITE}/"
+          REPO="${REPO} llvm-toolchain-${SUITE}-${LLVM_VERSION} main"
+          echo "${REPO}" \
+            | sudo tee /etc/apt/sources.list.d/llvm-${LLVM_VERSION}.list
+          sudo apt-get update
+
+      - name: Install pinned clang-format
+        run: |
+          sudo apt-get install -y --no-install-recommends \
+            clang-format-${LLVM_VERSION}
+
+      - name: Print out version
+        run: |
+          ${FORMAT} --version
+
+      - name: Check formatting
+        run: |
+          make format FORMAT=${FORMAT}
+
+  clang-tidy:
+    name: clang-tidy
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+
+    env:
+      LLVM_VERSION: "23"
+      SUITE: noble
+      TIDY: clang-tidy-23
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Add apt.llvm.org repository
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key \
+            | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+          REPO="deb http://apt.llvm.org/${SUITE}/"
+          REPO="${REPO} llvm-toolchain-${SUITE}-${LLVM_VERSION} main"
+          echo "${REPO}" \
+            | sudo tee /etc/apt/sources.list.d/llvm-${LLVM_VERSION}.list
+          sudo apt-get update
+
+      - name: Install pinned clang-tidy
+        run: |
+          sudo apt-get install -y --no-install-recommends \
+            clang-${LLVM_VERSION} \
+            clang-tidy-${LLVM_VERSION} \
+            clang-tools-${LLVM_VERSION} \
+            cmake ninja-build
+
+      - name: Print out version
+        run: |
+          ${TIDY} --version
+
+      - name: Run clang-tidy
+        run: |
+          make tidy TIDY=${TIDY}
+
+  cppcheck:
+    name: cppcheck
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Install cppcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cppcheck
+
+      - name: Print out version
+        run: |
+          cppcheck --version
+
+      - name: Run cppcheck
+        run: |
+          make cppcheck
+
+  editorconfig:
+    name: editorconfig
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+
+    env:
+      EC_VERSION: "4.0.2"
+      EC_SHA256: >-
+        44efaef3ed14c6ab52eb87481d78e5e5c204796dccf26e2f4598a61ba17f8003
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Install pinned editorconfig-checker
+        run: |
+          asset="editorconfig-checker-linux-amd64.tar.gz"
+          base="https://github.com/editorconfig-checker/editorconfig-checker"
+          url="${base}/releases/download/v${EC_VERSION}/${asset}"
+          curl -fsSL -o "${asset}" "${url}"
+          echo "${EC_SHA256}  ${asset}" | sha256sum -c -
+          tar -xzf "${asset}" editorconfig-checker
+          sudo install -m 0755 editorconfig-checker /usr/local/bin/
+
+      - name: Print out version
+        run: |
+          editorconfig-checker --version
+
+      - name: Run editorconfig check
+        run: |
+          make editorconfig
