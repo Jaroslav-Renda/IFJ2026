@@ -4,8 +4,8 @@
 #* @author  Jakub Poláček (xpolacj00)
 #* @brief   Makefile
 #* @date    2026-09-26
-#* 
-#* @details run clean build check build-check test run_valgrind cppcheck tidy tidy-fix format format-fix
+#*
+#* @details run clean build check build-check test run_valgrind cppcheck tidy tidy-fix format format-fix editorconfig
 #*
 #*/
 
@@ -76,6 +76,15 @@ format-fix: $(SRC) $(HEADERS)
 		echo "Warning: clang-format is not installed"; \
 	fi
 
+editorconfig:
+	@if command -v editorconfig-checker >/dev/null 2>&1; then \
+		echo "Starting editorconfig-checker..."; \
+		editorconfig-checker -format gcc; \
+	else \
+		echo "Error: editorconfig-checker is not installed"; \
+		exit 1; \
+	fi
+
 test:
 	mkdir ./test_f
 
@@ -91,4 +100,4 @@ clean:
 %.o: %.c
 	$(CC) $(CFLAGS) -c $^ -o $@
 
-.PHONY: run clean build check build-check cppcheck tidy tidy-fix format format-fix test run_valgrind
+.PHONY: run clean build check build-check cppcheck tidy tidy-fix format format-fix test run_valgrind editorconfig
