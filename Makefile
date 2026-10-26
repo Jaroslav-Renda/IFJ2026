@@ -5,8 +5,8 @@
 #* @brief   Makefile
 #* @date    2026-09-26
 #* 
-#* @details run clean build check build-check test run_valgrind cppcheck tidy format
-#*                 
+#* @details run clean build check build-check test run_valgrind cppcheck tidy tidy-fix format format-fix
+#*
 #*/
 
 CC=gcc
@@ -46,10 +46,32 @@ tidy: $(SRC)
 		echo "Warning: clang-tidy is not installed"; \
 	fi
 
-format:
-	@if command -v clang-format >/dev/null 2>&1; then \
+tidy-fix: $(SRC)
+	@if [ -z "$(SRC)" ]; then \
+		echo "No C sources found, skipping clang-tidy"; \
+	elif command -v $(TIDY) >/dev/null 2>&1; then \
+		echo "Starting clang-tidy..."; \
+		$(TIDY) $(SRC) --fix --fix-errors -- $(CFLAGS); \
+	else \
+		echo "Warning: clang-tidy is not installed"; \
+	fi
+
+format: $(SRC) $(HEADERS)
+	@if [ -z "$(SRC)$(HEADERS)" ]; then \
+		echo "No C sources or headers found, skipping clang-format"; \
+	elif command -v $(FORMAT) >/dev/null 2>&1; then \
+		echo "Starting clang-format..."; \
+		$(FORMAT) --dry-run --Werror $(SRC) $(HEADERS); \
+	else \
+		echo "Warning: clang-format is not installed"; \
+	fi
+
+format-fix: $(SRC) $(HEADERS)
+	@if [ -z "$(SRC)$(HEADERS)" ]; then \
+		echo "No C sources or headers found, skipping clang-format"; \
+	elif command -v $(FORMAT) >/dev/null 2>&1; then \
 		echo "Formatting files..."; \
-		clang-format -i --verbose $(SRC) $(HEADERS); \
+		$(FORMAT) -i --verbose $(SRC) $(HEADERS); \
 	else \
 		echo "Warning: clang-format is not installed"; \
 	fi
@@ -69,4 +91,4 @@ clean:
 %.o: %.c
 	$(CC) $(CFLAGS) -c $^ -o $@
 
-.PHONY: run clean build check build-check cppcheck tidy test run_valgrind
+.PHONY: run clean build check build-check cppcheck tidy tidy-fix format format-fix test run_valgrind
