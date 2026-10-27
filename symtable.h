@@ -3,6 +3,7 @@
  * @brief   Header file for symbol table data type (Hashtable - open addressing)
  * @author  Jakub Poláček (xpolacj00)
  * @date    2026-10-19
+ * @details project: IFJ2026
  */
 
 #ifndef SYMTAB_H
@@ -45,6 +46,7 @@ typedef struct {
 typedef struct {
     dataType type;
     bool isMutable; // false for constants
+    bool used;
 } symVarData;
 
 typedef struct {
