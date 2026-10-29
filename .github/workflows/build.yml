@@ -1,0 +1,42 @@
+name: build
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Install GCC 14
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-14
+
+      - name: Verify toolchain
+        run: |
+          gcc-14 --version
+          make --version
+          # The Makefile uses -std=c23, accepted by GCC only since 14.
+          test "$(gcc-14 -dumpversion | cut -d. -f1)" -ge 14
+
+      - name: Build
+        run: |
+          make build CC=gcc-14
+
+      - name: Verify the compiler binary was produced
+        run: |
+          test -x ./compiler
