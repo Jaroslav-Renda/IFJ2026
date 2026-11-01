@@ -7,7 +7,6 @@
 
 #ifndef LEXER_H
 #define LEXER_H
-#define MAX_INDENT_SIZE 50
 #include <stdbool.h>
 #include <stdio.h>
 
@@ -91,34 +90,19 @@ typedef struct {
 } Token;
 
 /**
- * @brief struct representing the state of lexer
- */
-typedef struct {
-    int currLine;
-    int indentStack[MAX_INDENT_SIZE];
-    int stackCount;
-    bool isNewLine;
-    int pendingDedents; // in case multiple indent blocks end at the same time
-    // and lexer has to return multiple dedent tokens in a row
-
-} lexerState;
-
-/**
  * @brief Reads sequence of characters from stdin, processes it, filters out
  * comments and whitespaces and returns a token
  * @param token Pointer to where the output token will be stored
- * @param lexerState Pointer to the structure representing current state of the
- * lexer, used to help with processing indentation and return curr line number
  * @return int Returns 0 on succesfull token generation, or 1 in case of lexical
  * analysis error
  */
 
-int getToken(Token *token, lexerState *state);
+int getToken(Token *token);
 
 /**
- * @brief Initialization function of lexer state
- * @param lexerState Pointer to lexerState struct, which will be inicialized
+ * @brief Initialization function of lexer state, must be called before first
+ * call of getToken
  */
-void lexerStateInit(lexerState *state);
+void lexerStateInit();
 
 #endif
