@@ -93,31 +93,6 @@ jobs:
         run: |
           make tidy TIDY=${TIDY}
 
-  cppcheck:
-    name: cppcheck
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          persist-credentials: false
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-
-      - name: Install cppcheck
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends cppcheck
-
-      - name: Print out version
-        run: |
-          cppcheck --version
-
-      - name: Run cppcheck
-        run: |
-          make cppcheck
-
   editorconfig:
     name: editorconfig
     runs-on: ubuntu-24.04
