@@ -24,7 +24,7 @@ build: $(OBJ)
 
 build-check: check build
 
-check: tidy
+check: tidy format editorconfig
 
 tidy: $(SRC)
 	@if [ -z "$(SRC)" ]; then \
