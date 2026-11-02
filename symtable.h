@@ -19,19 +19,19 @@ typedef enum : uint8_t {
     TYPE_DOUBLE,
     TYPE_STRING,
     TYPE_UNIT,
-    TYPE_ANY
+    TYPE_ANY,
 } dataType;
 
 typedef enum : uint8_t {
-    SYM_VAR, // Variable
-    SYM_FUNC // User defined or buildin functions
+    SYM_VAR,  // Variable
+    SYM_FUNC, // User defined or buildin functions
 } symKind;
 
 // State of one field in our array
 typedef enum : uint8_t {
     SLOT_EMPTY,    // Never used field
     SLOT_OCCUPIED, // Currently Occupied (active)
-    SLOT_DELETED   // We deleted the symbol but we need to raise this flag for
+    SLOT_DELETED,  // We deleted the symbol but we need to raise this flag for
                    // searching
 } slotState;
 
@@ -96,7 +96,7 @@ Symtable *symtableInit(size_t n);
  * @param key string which you want to add as a key
  * @return Pointer to the new initalized item or NULL in case of error of malloc
  */
-symtableItem *itemInit(Symtable *symtable, size_t idx, const char *key);
+static symtableItem *itemInit(Symtable *symtable, size_t idx, const char *key);
 
 /**
  * @brief Finds item in symtable
@@ -128,15 +128,14 @@ void symtableFree(Symtable *table);
  * @param table
  * @return True if we need to rehash false otherwise
  */
-bool checkForRehash(Symtable const *table);
+static bool checkForRehash(Symtable const *table);
 
 /**
  * @brief Funciton for rehasimg the item array with double capacity
  * @param table
  * @return True if succes
  */
-bool rehash(Symtable *table);
-
+static bool rehash(Symtable *table);
 /**
  * @brief Debugging function for printing all keys stored in array
  * @param table
