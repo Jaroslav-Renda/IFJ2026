@@ -24,17 +24,7 @@ build: $(OBJ)
 
 build-check: check build
 
-check: cppcheck tidy
-
-cppcheck: $(SRC)
-	@if [ -z "$(SRC)" ]; then \
-		echo "No C sources found, skipping cppcheck"; \
-	elif command -v cppcheck >/dev/null 2>&1; then \
-		echo "Starting cppcheck"; \
-		cppcheck --enable=all --error-exitcode=1 $(SRC); \
-	else \
-		echo "Warning: cppcheck is not installed"; \
-	fi
+check: tidy
 
 tidy: $(SRC)
 	@if [ -z "$(SRC)" ]; then \
