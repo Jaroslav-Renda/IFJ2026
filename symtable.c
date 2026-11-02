@@ -10,6 +10,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 Symtable *symtableInit(size_t n) {
     if (n < 1) {
         return NULL;
@@ -53,7 +54,7 @@ size_t symtableHashFunction(symtableKeyT key) {
     return hash;
 }
 
-symtableItem *itemInit(Symtable *symtable, size_t idx, const char *key) {
+static symtableItem *itemInit(Symtable *symtable, size_t idx, const char *key) {
     // TODO nevim jeste co presne mi posle syntax analyzator takze zatim tam
     // hodim jenom klic
     if (symtable == NULL || key == NULL ||
@@ -83,10 +84,9 @@ symtableItem *symtableLookupAdd(Symtable *table, symtableKeyT key) {
     size_t temp = idx;
     size_t auxil = table->capacity + 2;
     do {
-        if (table->items[temp].state == SLOT_OCCUPIED) {
-            if (strcmp(table->items[temp].key, key) == 0) {
-                return &table->items[temp];
-            }
+        if (table->items[temp].state == SLOT_OCCUPIED &&
+            strcmp(table->items[temp].key, key) == 0) {
+            return &table->items[temp];
         }
         if (table->items[temp].state == SLOT_EMPTY) {
             if (auxil != table->capacity + 2) {
@@ -116,26 +116,25 @@ symtableItem *symtableFind(Symtable *table, symtableKeyT key) {
         if (table->items[temp].state == SLOT_EMPTY) {
             return NULL;
         }
-        if (table->items[temp].state == SLOT_OCCUPIED) {
-            if (strcmp(table->items[temp].key, key) == 0) {
-                return &table->items[temp];
-            }
+        if (table->items[temp].state == SLOT_OCCUPIED &&
+            strcmp(table->items[temp].key, key) == 0) {
+            return &table->items[temp];
         }
         temp = (temp + 1) % table->capacity;
     } while (temp != idx);
     return NULL;
 }
 
-bool checkForRehash(Symtable const *table) {
+static bool checkForRehash(Symtable const *table) {
     return (table->usedSlots * 10 >= table->capacity * 6);
 }
 
-bool rehash(Symtable *table) {
+static bool rehash(Symtable *table) {
     if (table == NULL) {
         return false;
     }
     size_t newCapacity = table->capacity * 2;
-    symtableItem *newItems = malloc(newCapacity * sizeof(symtableItem));
+    symtableItem *newItems = calloc(newCapacity, sizeof(symtableItem));
     if (newItems == NULL) {
         return false;
     }
