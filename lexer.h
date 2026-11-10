@@ -3,6 +3,7 @@
  * @author  Jakub Zenata (xzenatj00)
  * @brief   header file of lexer
  * @date    2026-10-06
+ * @details project_IFJ2026
  */
 
 #ifndef LEXER_H
