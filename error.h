@@ -1,3 +1,10 @@
+/**
+ * @file    error.h
+ * @brief   Header file for global error handeling
+ * @author  Jaroslav Renda (xrendaj00)
+ * @details project_IFJ2026
+ */
+
 #ifndef ERROR_H
 #define ERROR_H
 
