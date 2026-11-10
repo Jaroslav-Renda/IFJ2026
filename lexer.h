@@ -82,6 +82,7 @@ typedef struct {
      */
     union {
         char *identifier;
+        char *stringVal;
         double doubleVal;
         int intVal;
         keyword keywordVal;
