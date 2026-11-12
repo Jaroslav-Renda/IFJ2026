@@ -21,6 +21,7 @@ typedef enum : uint8_t {
     TYPE_STRING,
     TYPE_UNIT,
     TYPE_ANY,
+    TYPE_BOOL, // internal type for conditions
 } dataType;
 
 typedef enum : uint8_t {
@@ -52,6 +53,7 @@ typedef struct {
     dataType returnType;
     bool hasExplicitReturnType; // was the return type explicitly stated
     bool hasReturnStmt;         // does the body contain return type?
+    bool isEvaluated;
     bool isMain;
     bool isBuiltin;
     size_t paramCount;

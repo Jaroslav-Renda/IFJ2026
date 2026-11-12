@@ -73,7 +73,6 @@ static symtableItem *itemInit(Symtable *symtable, size_t idx, const char *key) {
     memcpy(symtable->items[idx].key, key, len);
     symtable->items[idx].state = SLOT_OCCUPIED;
     symtable->items[idx].data.var.used = false;
-
     symtable->size++;
     symtable->usedSlots++;
     if (checkForRehash(symtable)) {
