@@ -72,6 +72,128 @@ static bool isFirstStat(currentToken *cur) {
     return false;
 }
 
+static bool parseWhile(currentToken *cur) {
+    if (!nextToken(cur)) {
+        return false;
+    };
+
+    // parse condition
+    if (!parseExpression(cur, NULL)) {
+        return false;
+    }
+
+    if (!expectKeyword(cur, KEYWORD_DO, "Syntax error: missing keyword 'do' after condition")) {
+        return false;
+    }
+    if (!expectToken(cur, TOKEN_EOL, "Syntax error: missing EOL after 'do'")) {
+        return false;
+    }
+
+    // parse do block
+    if (!parseBlock(cur)) {
+        return false;
+    }
+
+    return true;
+}
+
+static bool parseIf(currentToken *cur) {
+    if (!nextToken(cur)) {
+        return false;
+    };
+
+    // parse condition
+    if (!parseExpression(cur, NULL)) {
+        return false;
+    }
+
+    if (!expectKeyword(cur, KEYWORD_THEN, "Syntax error: missing keyword 'then' after condition")) {
+        return false;
+    }
+    if (!expectToken(cur, TOKEN_EOL, "Syntax error: missing EOL after 'then'")) {
+        return false;
+    }
+
+    // parse if block
+    if (!parseBlock(cur)) {
+        return false;
+    }
+
+    if (!expectKeyword(cur, KEYWORD_ELSE, "Syntax error: missing mandatory 'else' branch")) {
+        return false;
+    }
+    if (!expectToken(cur, TOKEN_EOL, "Syntax error: missing EOL after 'else'")) {
+        return false;
+    }
+
+    // parse else block
+    if (!parseBlock(cur)) {
+        return false;
+    }
+
+    return true;
+}
+
+bool parseBlockStat(currentToken *cur) {
+    // parse if
+    if (cur->token.type == TOKEN_KEYWORD && cur->token.data.keywordVal == KEYWORD_IF) {
+        return parseIf(cur);
+    }
+
+    // parse while
+    if (cur->token.type == TOKEN_KEYWORD && cur->token.data.keywordVal == KEYWORD_WHILE) {
+        return parseWhile(cur);
+    }
+
+    errorParser(cur->token.line, "Syntax error: expected 'if' or 'while' statement");
+    return false;
+}
+
+static bool parseVariableDec(currentToken *cur) {
+    if (!expectToken(cur, TOKEN_IDENTIFIER, "Syntax error: missing variable identifier")) {
+        return false;
+    }
+
+    if (!parseOptType(cur)) {
+        return false;
+    }
+
+    if (!expectToken(cur, TOKEN_EQUAL_SIGN, "Syntax error: missing '=' before initialization")) {
+        return false;
+    }
+
+    return parseExpression(cur, NULL);
+}
+
+bool parseStat(currentToken *cur) {
+    // parse val declaration
+    if (cur->token.type == TOKEN_KEYWORD && cur->token.data.keywordVal == KEYWORD_VAL) {
+        return (nextToken(cur) && parseVariableDec(cur));
+    }
+
+    // parse var declaration
+    if (cur->token.type == TOKEN_KEYWORD && cur->token.data.keywordVal == KEYWORD_VAR) {
+        return (nextToken(cur) && parseVariableDec(cur));
+    }
+
+    // parse return
+    if (cur->token.type == TOKEN_KEYWORD && cur->token.data.keywordVal == KEYWORD_RETURN) {
+        return (nextToken(cur) && parseRetVal(cur));
+    }
+
+    // parse expression
+    if (cur->token.type == TOKEN_IDENTIFIER) {
+        return parseStAfterId(cur);
+    }
+
+    if (isFirstExp(cur)) {
+        return parseExpression(cur, NULL);
+    }
+
+    errorParser(cur->token.line, "Syntax error: expected 'val', 'var', 'return', or an expression");
+    return false;
+}
+
 bool parseStRest(currentToken *cur) {
     // got indentation after statement
     if (cur->token.type == TOKEN_DEDENT) {
