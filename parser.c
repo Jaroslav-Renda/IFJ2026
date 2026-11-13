@@ -72,6 +72,39 @@ static bool isFirstStat(currentToken *cur) {
     return false;
 }
 
+bool parseType(currentToken *cur) {
+    if (cur->token.type == TOKEN_KEYWORD) {
+        switch (cur->token.data.keywordVal) {
+        case KEYWORD_UNIT:
+        case KEYWORD_STRING:
+        case KEYWORD_INT:
+        case KEYWORD_DOUBLE:
+            return nextToken(cur);
+        default:
+            break;
+        }
+    }
+
+    errorParser(cur->token.line, "Syntax error: expected data type");
+    return false;
+}
+
+bool parseRetVal(currentToken *cur) {
+    // return can be empty and have eol or ';' after it
+    if (cur->token.type == TOKEN_SEMICOLON || cur->token.type == TOKEN_EOL) {
+        return true;
+    }
+
+    // parse return expressioin
+    if (isFirstExp(cur)) {
+        return parseExpression(cur, NULL);
+    }
+
+    errorParser(
+        cur->token.line, "Syntax error: expected return expression, ';', or EOL after 'return'");
+    return false;
+}
+
 static bool parseWhile(currentToken *cur) {
     if (!nextToken(cur)) {
         return false;
