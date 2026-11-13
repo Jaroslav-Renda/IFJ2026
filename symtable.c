@@ -3,8 +3,9 @@
  * @brief   Source file for symbol table data type (Hashtable - open addressing)
  * @author  Jakub Poláček (xpolacj00)
  * @date    2026-10-19
- * @details project: IFJ2026
+ * @details project_IFJ2026
  */
+
 #include "symtable.h"
 #include <stddef.h>
 #include <stdio.h>
@@ -60,8 +61,7 @@ size_t symtableHashFunction(symtableKeyT key) {
 static symtableItem *itemInit(Symtable *symtable, size_t idx, const char *key) {
     // TODO nevim jeste co presne mi posle syntax analyzator takze zatim tam
     // hodim jenom klic
-    if (symtable == NULL || key == NULL ||
-        symtable->items[idx].state == SLOT_OCCUPIED) {
+    if (symtable == NULL || key == NULL || symtable->items[idx].state == SLOT_OCCUPIED) {
         return NULL;
     }
     size_t len = strlen(key) + 1;
@@ -89,8 +89,7 @@ symtableItem *symtableLookupAdd(Symtable *table, symtableKeyT key) {
     size_t temp = idx;
     size_t auxil = table->capacity + 2;
     do {
-        if (table->items[temp].state == SLOT_OCCUPIED &&
-            strcmp(table->items[temp].key, key) == 0) {
+        if (table->items[temp].state == SLOT_OCCUPIED && strcmp(table->items[temp].key, key) == 0) {
             return &table->items[temp];
         }
         if (table->items[temp].state == SLOT_EMPTY) {
@@ -99,8 +98,7 @@ symtableItem *symtableLookupAdd(Symtable *table, symtableKeyT key) {
             }
             return itemInit(table, temp, key);
         }
-        if (table->items[temp].state == SLOT_DELETED &&
-            auxil == table->capacity + 2) {
+        if (table->items[temp].state == SLOT_DELETED && auxil == table->capacity + 2) {
             auxil = temp;
         }
         temp = (temp + 1) % table->capacity;
@@ -121,8 +119,7 @@ symtableItem *symtableFind(Symtable *table, symtableKeyT key) {
         if (table->items[temp].state == SLOT_EMPTY) {
             return NULL;
         }
-        if (table->items[temp].state == SLOT_OCCUPIED &&
-            strcmp(table->items[temp].key, key) == 0) {
+        if (table->items[temp].state == SLOT_OCCUPIED && strcmp(table->items[temp].key, key) == 0) {
             return &table->items[temp];
         }
         temp = (temp + 1) % table->capacity;
@@ -148,8 +145,7 @@ static bool rehash(Symtable *table) {
     }
     for (size_t i = 0; i < table->capacity; i++) {
         if (table->items[i].state == SLOT_OCCUPIED) {
-            size_t idx =
-                symtableHashFunction(table->items[i].key) % newCapacity;
+            size_t idx = symtableHashFunction(table->items[i].key) % newCapacity;
             while (newItems[idx].state != SLOT_EMPTY) {
                 idx = (idx + 1) % newCapacity;
             }

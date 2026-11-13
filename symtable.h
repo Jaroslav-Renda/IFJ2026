@@ -3,7 +3,7 @@
  * @brief   Header file for symbol table data type (Hashtable - open addressing)
  * @author  Jakub Poláček (xpolacj00)
  * @date    2026-10-19
- * @details project: IFJ2026
+ * @details project_IFJ2026
  */
 
 #ifndef SYMTAB_H
@@ -32,8 +32,7 @@ typedef enum : uint8_t {
 typedef enum : uint8_t {
     SLOT_EMPTY,    // Never used field
     SLOT_OCCUPIED, // Currently Occupied (active)
-    SLOT_DELETED,  // We deleted the symbol but we need to raise this flag for
-                   // searching
+    SLOT_DELETED,  // We deleted the symbol but we need to raise this flag for searching
 } slotState;
 
 // structure for parametrs
@@ -71,8 +70,7 @@ typedef struct {
 
 typedef struct SymtableT {
     size_t size;      // SLOT_OCCUPIRED
-    size_t usedSlots; // SLOT_OCCUPIED + SLOT_DELETED (to decide if we should
-                      // rehash)
+    size_t usedSlots; // SLOT_OCCUPIED + SLOT_DELETED (to decide if we should rehash)
     size_t capacity;
     symtableItem *items;
 } Symtable;
