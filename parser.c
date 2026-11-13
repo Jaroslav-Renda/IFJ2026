@@ -47,6 +47,109 @@ static bool isFirstExp(currentToken *cur) {
     }
 }
 
+// helper function -> can token be at the start of a block statement?
+static bool isFirstBlockStat(currentToken *cur) {
+    return (cur->token.type == TOKEN_KEYWORD && (cur->token.data.keywordVal == KEYWORD_IF ||
+                                                    cur->token.data.keywordVal == KEYWORD_WHILE));
+}
+
+// helper function -> can token be at the start of a statement?
+static bool isFirstStat(currentToken *cur) {
+    if (isFirstExp(cur)) {
+        return true;
+    }
+
+    if (cur->token.type == TOKEN_KEYWORD) {
+        switch (cur->token.data.keywordVal) {
+        case KEYWORD_VAL:
+        case KEYWORD_VAR:
+        case KEYWORD_RETURN:
+            return true;
+        default:
+            return false;
+        }
+    }
+    return false;
+}
+
+bool parseStRest(currentToken *cur) {
+    // got indentation after statement
+    if (cur->token.type == TOKEN_DEDENT) {
+        return true;
+    }
+
+    // parse another statement
+    if (isFirstStat(cur)) {
+        return (parseStat(cur) && parseStNext(cur));
+    }
+
+    // parse another block statement
+    if (isFirstBlockStat(cur)) {
+        return (parseBlockStat(cur) && parseStRest(cur));
+    }
+
+    errorParser(cur->token.line, "Syntax error: expected next statement or block dedent");
+    return false;
+}
+
+bool parseStNext(currentToken *cur) {
+    // statement ends with EOL
+    if (cur->token.type == TOKEN_EOL) {
+        // parse another statement after a EOL
+        return (nextToken(cur) && parseStRest(cur));
+    }
+
+    // statement ends with semicolon
+    if (cur->token.type == TOKEN_SEMICOLON) {
+        if (!nextToken(cur)) {
+            return false;
+        }
+
+        if (!parseOptEol(cur)) {
+            return false;
+        }
+
+        // parse another statement after a ';'
+        return parseStRest(cur);
+    }
+
+    errorParser(cur->token.line, "Syntax error: missing EOL or ';' after statement");
+    return false;
+}
+
+bool parseStList(currentToken *cur) {
+    // parse normal statements
+    if (isFirstStat(cur)) {
+        return (parseStat(cur) && parseStNext(cur));
+    }
+
+    // parse block statements (loops and conditions)
+    if (isFirstBlockStat(cur)) {
+        return (parseBlockStat(cur) && parseStRest(cur));
+    }
+
+    errorParser(cur->token.line, "Syntax error: block must contain at least one valid statement");
+    return false;
+}
+
+bool parseBlock(currentToken *cur) {
+    if (!expectToken(
+            cur, TOKEN_INDENT, "Syntax error: expected indentation at the start of block")) {
+        return false;
+    }
+
+    // parse all the statements in the block
+    if (!parseStList(cur)) {
+        return false;
+    }
+
+    if (!expectToken(cur, TOKEN_DEDENT, "Syntax error: expected unindent at the end of block")) {
+        return false;
+    }
+
+    return true;
+}
+
 bool parseFooBody(currentToken *cur) {
     // parse function with a block body
     if (cur->token.type == TOKEN_EOL) {
