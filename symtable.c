@@ -12,9 +12,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define REHASH_LIMIT                                                           \
-    6 // representing 60% of used slots in the table, if this limit is reached,
-      // rehashing will be performed
+#define REHASH_LIMIT 6 // representing 60% of used slots in the table, if this limit is reached,
+                       // rehashing will be performed
 Symtable *symtableInit(size_t n) {
     if (n < 1) {
         return NULL;
