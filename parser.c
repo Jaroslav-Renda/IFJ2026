@@ -340,6 +340,99 @@ bool parseOptType(currentToken *cur) {
     return false;
 }
 
+bool parseAfterCom(currentToken *cur) {
+    // parse next parameter
+    if (cur->token.type == TOKEN_IDENTIFIER) {
+        if (!nextToken(cur)) {
+            return false;
+        }
+
+        if (!parseOptEol(cur)) {
+            return false;
+        }
+
+        if (!expectToken(cur, TOKEN_COLON, "Syntax error: missing ':' after parameter name")) {
+            return false;
+        }
+
+        if (!parseOptEol(cur)) {
+            return false;
+        }
+        if (!parseType(cur)) {
+            return false;
+        }
+        if (!parseOptEol(cur)) {
+            return false;
+        }
+
+        // parse next parameter
+        return parseNextParam(cur);
+    }
+
+    // parse EOL in parameters
+    if (cur->token.type == TOKEN_EOL) {
+        return (nextToken(cur) && parseParams(cur));
+    }
+
+    errorParser(cur->token.line, "Syntax error: expected parameter identifier or EOL after ','");
+    return false;
+}
+
+bool parseNextParam(currentToken *cur) {
+
+    // no more parameters
+    if (cur->token.type == TOKEN_RIGHT_BRACKET) {
+        return true;
+    }
+
+    // parse comma
+    if (cur->token.type == TOKEN_COMMA) {
+        return (nextToken(cur) && parseAfterCom(cur));
+    }
+
+    errorParser(cur->token.line,
+        "Syntax error: expected ',' for next parameter or ')' to close parameter list");
+    return false;
+}
+
+bool parseParams(currentToken *cur) {
+    // parse parameter
+    if (cur->token.type == TOKEN_IDENTIFIER) {
+        if (!nextToken(cur)) {
+            return false;
+        }
+
+        if (!parseOptEol(cur)) {
+            return false;
+        }
+
+        if (!expectToken(cur, TOKEN_COLON, "Syntax error: missing ':' after parameter name")) {
+            return false;
+        }
+
+        if (!parseOptEol(cur)) {
+            return false;
+        }
+        if (!parseType(cur)) {
+            return false;
+        }
+        if (!parseOptEol(cur)) {
+            return false;
+        }
+
+        // parse next parameter
+        return parseNextParam(cur);
+    }
+
+    // no more parameters
+    if (cur->token.type == TOKEN_RIGHT_BRACKET) {
+        return nextToken(cur);
+    }
+
+    errorParser(cur->token.line, "Syntax error: expected parameter name or ')'");
+    return false;
+}
+
 // helper function -> what tokens can immediately follow a missing end of line
 static bool isFollowOptEol(currentToken *cur) {
     switch (cur->token.type) {
