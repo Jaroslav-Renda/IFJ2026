@@ -6,7 +6,7 @@
 #* @date    2026-09-26
 #*
 #* @details run clean build check build-check test run_valgrind cppcheck tidy tidy-fix format format-fix editorconfig
-#*
+#* @details project_IFJ2026
 #*/
 
 CC=gcc

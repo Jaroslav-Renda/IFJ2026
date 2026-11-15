@@ -11,6 +11,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#define REHASH_LIMIT 6
+// representing 60% of used slots in the table, if this limit is reached, rehashing will be
+// performed
+
 Symtable *symtableInit(size_t n) {
     if (n < 1) {
         return NULL;
@@ -67,6 +72,8 @@ static symtableItem *itemInit(Symtable *symtable, size_t idx, const char *key) {
     }
     memcpy(symtable->items[idx].key, key, len);
     symtable->items[idx].state = SLOT_OCCUPIED;
+    symtable->items[idx].data.var.used = false;
+
     symtable->size++;
     symtable->usedSlots++;
     if (checkForRehash(symtable)) {
@@ -122,7 +129,7 @@ symtableItem *symtableFind(Symtable *table, symtableKeyT key) {
 }
 
 static bool checkForRehash(Symtable const *table) {
-    return (table->usedSlots * 10 >= table->capacity * 6);
+    return (table->usedSlots * 10 >= table->capacity * REHASH_LIMIT);
 }
 
 static bool rehash(Symtable *table) {

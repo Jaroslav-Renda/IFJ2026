@@ -45,6 +45,7 @@ typedef struct {
 typedef struct {
     dataType type;
     bool isMutable; // false for constants
+    bool used;
 } symVarData;
 
 typedef struct {
