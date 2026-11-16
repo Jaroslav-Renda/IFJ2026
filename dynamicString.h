@@ -13,44 +13,44 @@
  * @brief struct representing dynamic string
  */
 
-typedef struct dynamicString {
+typedef struct TDynamicString {
     unsigned long length;
     unsigned long allocSize;
     char *str;
-} tDynamicString;
+} DynamicString;
 
 /**
  * @brief Function creates new string
- * @param s dynamic string to be initialized
+ * @param dynamicStr dynamic string to be initialized
  * @return int Returns 0 on succesfull init, or 1 in case of failure
  */
-int strInit(tDynamicString *s);
+int strInit(DynamicString *dynamicStr);
 /**
  * @brief Function frees allocated memory of string
- * @param s dynamic string to be freed
+ * @param dynamicStr dynamic string to be freed
  */
-void strFree(tDynamicString *s);
+void strFree(DynamicString *dynamicStr);
 
 /**
  * @brief Function adds character to end of string
- * @param s dynamic string to which char is added
- * @param c char added to end of string
+ * @param dynamicStr dynamic string to which char is added
+ * @param charAdded char added to end of string
  * @return int Returns 0 on succesfull add, or 1 in case of failure
  */
-int strAddChar(tDynamicString *s, char c);
+int strAddChar(DynamicString *dynamicStr, char charAdded);
 
 /**
  * @brief Function clears string
- * @param s dynamic string which should be cleared
+ * @param dynamicStr dynamic string which should be cleared
  */
-void strClear(tDynamicString *s);
+void strClear(DynamicString *dynamicStr);
 /**
  * @brief Function compares dynamic string with a constant string
- * @param s1 dynamic string which should be compared
- * @param s2 const string which should be compared
+ * @param str1 dynamic string which should be compared
+ * @param str2 const string which should be compared
  *
  * @return int Returns result of strcmp
  */
-int strCompare(tDynamicString *s1, const char *s2);
+int strCompare(DynamicString *str1, const char *str2);
 
 #endif
