@@ -5,4 +5,5 @@
  * @details project_IFJ2026
  */
 
-int main() { return 0; }
+#include "error.h"
+int main() { return errorReturnValue(); }
