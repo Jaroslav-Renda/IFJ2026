@@ -116,5 +116,18 @@ void errorSemOther(int lineNumber, const char *str);
  * @param str Specifics for the error to print out.
  */
 void errorInternal(const char *str);
+/**
+ * @brief Prints a debug statement with the specified message.
+ *
+ * @param str Specifics for the debug to print out.
+ */
+void errorDebug(const char *str);
+
+/**
+ * @brief Returns the error code that might have been changed by calling previous functions.
+ *
+ * @return Number to return from the program.
+ */
+int errorReturnValue();
 
 #endif // !ERROR_H
