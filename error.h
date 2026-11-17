@@ -1,7 +1,7 @@
 /**
  * @file    error.h
  * @brief   Implementation of global error handling
- * @author  Jaroslav Renda (xrendaj00)
+ * @author  Petr Mácha (xmachap00)
  * @details project_IFJ2026
  */
 
