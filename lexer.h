@@ -11,6 +11,20 @@
 #include <stdbool.h>
 #include <stdio.h>
 
+enum automatState {
+    STATE_START,
+    STATE_IDENTIFIER,
+    STATE_ZERO_NUMBER,
+    STATE_DECIMAL_POINT, // nacetli jsme . cekame na cislo, jinak error
+    STATE_DECIMAL_NUMBER,
+    STATE_EXPONENT_E, // nacetli jsme e, cekame na znamenko/cislo
+    STATE_EXPONENT_SIGN,
+    STATE_EXPONENT_NUMBERS, // cislo
+    STATE_DOUBLE_SUFFIX,    // nacetli jsme d, konecny stav pro double
+
+    STATE_LINE_COMMENT, // radkovy komentar
+};
+
 /**
  * @brief all supported tokens
  */
@@ -25,6 +39,7 @@ typedef enum {
     TOKEN_RIGHT_BRACKET,
     TOKEN_SEMICOLON,
     TOKEN_COLON,
+    TOKEN_PERIOD,
     TOKEN_COMMA,
     TOKEN_EQUAL_SIGN,
     TOKEN_EOL,
@@ -41,6 +56,7 @@ typedef enum {
     TOKEN_NOT_EQUAL_TO,
     TOKEN_INDENT,
     TOKEN_DEDENT,
+    TOKEN_MAIN,
 } tokenType;
 
 /**
