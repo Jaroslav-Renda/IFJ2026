@@ -8,6 +8,23 @@
 #ifndef ERROR_H
 #define ERROR_H
 
+#include <stdint.h>
+
+/**
+ * @brief Error return numbers of the compiler.
+ */
+typedef enum : uint8_t {
+    ERR_LEXER = 1,            // Error in lexical analysis.
+    ERR_PARSER = 2,           // Error in syntactic analysis.
+    ERR_SEM_UNDEFINED = 3,    // Use of undefined function, variable or type, missing @main.
+    ERR_SEM_REDEFINITION = 4, // Forbidden redefinition of a function, variable or type.
+    ERR_SEM_ARGUMENTS = 5,    // Wrong arguments of a function call, forbidden @main params.
+    ERR_SEM_TYPE = 6,         // Type compatibility or type inference error.
+    ERR_SEM_IMMUTABLE = 7,    // Write to an immutable variable or a formal parameter.
+    ERR_SEM_OTHER = 10,       // Other semantic errors.
+    ERR_INTERNAL = 99,        // Internal compiler error.
+} errorCode;
+
 /**
  * @brief Print out error from lexical analysis and set return number to 1.
  *
