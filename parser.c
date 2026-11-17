@@ -32,6 +32,53 @@ static bool expectKeyword(currentToken *cur, keyword expectedKey, const char *er
     return nextToken(cur);
 }
 
+static bool isLookaheadExpressionFirst(currentToken *cur) {
+    switch (cur->token.type) {
+    case TOKEN_LEFT_BRACKET:
+    case TOKEN_SEMICOLON:
+    case TOKEN_EOL:
+    case TOKEN_EOF:
+    case TOKEN_PLUS:
+    case TOKEN_MINUS:
+    case TOKEN_MULTIPLY:
+    case TOKEN_DIVIDE:
+    case TOKEN_COMPARE_BIGGER_EQUAL:
+    case TOKEN_COMPARE_BIGGER_THAN:
+    case TOKEN_COMPARE_LESSER_EQUAL:
+    case TOKEN_COMPARE_SMALLER_THAN:
+    case TOKEN_EQUAL_TO:
+    case TOKEN_NOT_EQUAL_TO:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool parseStAfterId(currentToken *cur) {
+    lookaheadToken lat;
+    lat.token = cur->token;
+    lat.isEmpty = true;
+    if (!nextToken(cur)) {
+        return false;
+    }
+
+    if (cur->token.type == TOKEN_EQUAL_SIGN) {
+        if (!nextToken(cur)) {
+            return false;
+        }
+
+        return parseExpression(cur, NULL);
+    }
+
+    if (isLookaheadExpressionFirst(cur)) {
+        lat.isEmpty = false;
+        return parseExpression(cur, &lat);
+    }
+
+    errorParser(cur->token.line, "Syntax error: unexpected token after identificator in statement");
+    return false;
+}
+
 // helper function -> token can be at the start of an expression
 static bool isFirstExp(currentToken *cur) {
     switch (cur->token.type) {
