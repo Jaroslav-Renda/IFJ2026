@@ -13,5 +13,5 @@
 #define SYMANALYS_H
 
 symtableItem *findVarInScopes(stackPtr stack, const char *identifier);
-int semantAnalyze(ASTNode *program);
+int semantAnalyse(ASTNode *program);
 #endif // SYMANALYS_H

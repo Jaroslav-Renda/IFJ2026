@@ -12,6 +12,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h> // size_t
+
+typedef struct ASTNode ASTNode;
 typedef const char *symtableKeyT;
 
 typedef enum : uint8_t {
@@ -51,8 +53,10 @@ typedef struct {
 
 typedef struct {
     dataType returnType;
+    ASTNode *node;
     bool hasExplicitReturnType; // was the return type explicitly stated
     bool hasReturnStmt;         // does the body contain return type?
+    bool beingEvaluated;
     bool isEvaluated;
     bool isMain;
     bool isBuiltin;
