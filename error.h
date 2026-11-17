@@ -115,7 +115,8 @@ void errorSemOther(int lineNumber, const char *str);
  *
  * @param str Specifics for the error to print out.
  */
-void errorInternal(const char *str);
+void errorInternal(int lineNumber, const char *str);
+
 /**
  * @brief Prints a debug statement with the specified message.
  *
