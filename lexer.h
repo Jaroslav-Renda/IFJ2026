@@ -11,18 +11,30 @@
 #include <stdbool.h>
 #include <stdio.h>
 
+#define KEYWORDS_COUNT 22
+
 enum automatState {
     STATE_START,
     STATE_IDENTIFIER,
-    STATE_ZERO_NUMBER,
-    STATE_DECIMAL_POINT, // nacetli jsme . cekame na cislo, jinak error
-    STATE_DECIMAL_NUMBER,
-    STATE_EXPONENT_E, // nacetli jsme e, cekame na znamenko/cislo
-    STATE_EXPONENT_SIGN,
-    STATE_EXPONENT_NUMBERS, // cislo
-    STATE_DOUBLE_SUFFIX,    // nacetli jsme d, konecny stav pro double
+    STATE_FULL_NUMBER,                // koncovy
+    STATE_FULL_NUMBER_UNDERSCORE,     // nekoncovy
+    STATE_ZERO_NUMBER,                // koncovy
+    STATE_DECIMAL_POINT,              // nacetli jsme . cekame na cislo, jinak error
+    STATE_DECIMAL_NUMBER,             // koncovy
+    STATE_DECIMAL_NUMBER_UNDERSCORE,  // nekoncovy
+    STATE_EXPONENT_E,                 // nacetli jsme e, cekame na znamenko/cislo , neni koncovy
+    STATE_EXPONENT_SIGN,              // nacetli jsme e a znamenko
+    STATE_EXPONENT_NUMBER,            // cislo
+    STATE_EXPONENT_NUMBER_UNDERSCORE, // cislo
+    STATE_DOUBLE_SUFFIX,              // nacetli jsme d, konecny stav pro double
 
+    STATE_SLASH,
     STATE_LINE_COMMENT, // radkovy komentar
+    STATE_ANGLE_BRACKET_LESSER,
+    STATE_ANGLE_BRACKET_BIGGER,
+    STATE_EQUAL,
+    STATE_EXCLAMATION_MARK,
+
 };
 
 /**
