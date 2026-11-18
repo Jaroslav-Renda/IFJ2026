@@ -8,23 +8,13 @@
 
 #include "semantAnalys.h"
 #include "ast.h"
+#include "error.h"
 #include "symtable.h"
 #include "symtableStack.h"
 #include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-
-#define SEM_OK 0
-#define ERR_LEX 1
-#define ERR_SYNTAX 2
-#define ERR_SEM_UNDEF 3 /// Undefined function/variable, missing @main
-#define ERR_SEM_REDEF                                                                              \
-    4 /// Redefinition of function/variable in scope, duplicate param, multiple @main
-#define ERR_SEM_PARAMS 5    /// Wrong number/type of arguments in call, parameters in @main
-#define ERR_SEM_TYPE 6      /// Type incompatibility, failed type inference, bad return type
-#define ERR_SEM_IMMUTABLE 7 /// Assignment to an immutable variable (val) or parameter
-#define ERR_SEM_OTHER 10    /// Other semantic errors
-#define ERR_INTERNAL 99     /// Internal compiler error (malloc failure, malformed AST, etc.)
 
 /**
  * @brief Helper structure defining the signature of an IFJ26 built-in function.
@@ -53,9 +43,9 @@ static ASTNode *unwrapBlock(ASTNode *node) {
  *
  * @param table Pointer to the global function symbol table.
  * @param def   Pointer to the built-in function descriptor.
- * @return SEM_OK on success, ERR_INTERNAL on memory allocation failure.
+ * @return OK on success, ERR_INTERNAL on memory allocation failure.
  */
-static int addSingleBuiltin(Symtable *table, const BuiltinDef *def) {
+static uint8_t addSingleBuiltin(Symtable *table, const BuiltinDef *def) {
     symtableItem *item = symtableLookupAdd(table, def->name);
     if (item == NULL) {
         return ERR_INTERNAL;
@@ -85,36 +75,36 @@ static int addSingleBuiltin(Symtable *table, const BuiltinDef *def) {
         item->data.func.params = NULL;
     }
 
-    return SEM_OK;
+    return OK;
 }
 
 /**
  * @brief Pre-populates the global function table with all 10 IFJ26 built-in functions.
  *
  * @param table Pointer to the global function symbol table.
- * @return SEM_OK on success, ERR_INTERNAL on allocation error.
+ * @return OK on success, ERR_INTERNAL on allocation error.
  */
-static int registerBuiltins(Symtable *table) {
+static uint8_t registerBuiltins(Symtable *table) {
     static const BuiltinDef builtins[] = {
-        {"print", TYPE_UNIT, 1, {TYPE_ANY}},
-        {"readLine", TYPE_STRING, 0, {TYPE_UNKNOWN}},
-        {"readInt", TYPE_INT, 0, {TYPE_UNKNOWN}},
-        {"readDouble", TYPE_DOUBLE, 0, {TYPE_UNKNOWN}},
-        {"toStr", TYPE_STRING, 1, {TYPE_ANY}},
-        {"toInt", TYPE_INT, 1, {TYPE_DOUBLE}},
-        {"strLength", TYPE_INT, 1, {TYPE_STRING}},
-        {"substr", TYPE_STRING, 3, {TYPE_STRING, TYPE_INT, TYPE_INT}},
-        {"ord", TYPE_INT, 2, {TYPE_STRING, TYPE_INT}},
-        {"chr", TYPE_STRING, 1, {TYPE_INT}}};
+        {"print", 1, TYPE_UNIT, {TYPE_ANY}},
+        {"readLine", 0, TYPE_STRING, {TYPE_UNKNOWN}},
+        {"readInt", 0, TYPE_INT, {TYPE_UNKNOWN}},
+        {"readDouble", 0, TYPE_DOUBLE, {TYPE_UNKNOWN}},
+        {"toStr", 1, TYPE_STRING, {TYPE_ANY}},
+        {"toInt", 1, TYPE_INT, {TYPE_DOUBLE}},
+        {"strLength", 1, TYPE_INT, {TYPE_STRING}},
+        {"substr", 3, TYPE_STRING, {TYPE_STRING, TYPE_INT, TYPE_INT}},
+        {"ord", 2, TYPE_INT, {TYPE_STRING, TYPE_INT}},
+        {"chr", 1, TYPE_STRING, {TYPE_INT}}};
 
     size_t count = sizeof(builtins) / sizeof(builtins[0]);
     for (size_t i = 0; i < count; i++) {
-        int err = addSingleBuiltin(table, &builtins[i]);
-        if (err != SEM_OK) {
+        uint8_t err = addSingleBuiltin(table, &builtins[i]);
+        if (err != OK) {
             return err;
         }
     }
-    return SEM_OK;
+    return OK;
 }
 
 /**
@@ -200,12 +190,12 @@ static size_t getNumberOfParams(const ASTNode *param) {
  * @param funcInTable Target function symbol table item.
  * @param firstParam  First NODE_PARAM in the AST parameter list.
  * @param paramCnt    Number of parameters to copy.
- * @return SEM_OK on success, ERR_SEM_REDEF on duplicate parameter names, or ERR_INTERNAL.
+ * @return OK on success, ERR_SEM_REDEFINITION on duplicate parameter names, or ERR_INTERNAL.
  */
-static int fillFuncParams(symtableItem *funcInTable, ASTNode *firstParam, size_t paramCnt) {
+static uint8_t fillFuncParams(symtableItem *funcInTable, ASTNode *firstParam, size_t paramCnt) {
     if (paramCnt == 0) {
         funcInTable->data.func.params = NULL;
-        return SEM_OK;
+        return OK;
     }
 
     funcInTable->data.func.params = calloc(paramCnt, sizeof(*funcInTable->data.func.params));
@@ -218,14 +208,14 @@ static int fillFuncParams(symtableItem *funcInTable, ASTNode *firstParam, size_t
         /// Check for duplicate parameter names within the same function header -> Error 4
         for (size_t j = 0; j < i; j++) {
             if (strcmp(funcInTable->data.func.params[j].name, currParam->data.param.name) == 0) {
-                return ERR_SEM_REDEF;
+                return ERR_SEM_REDEFINITION;
             }
         }
         funcInTable->data.func.params[i].name = currParam->data.param.name;
         funcInTable->data.func.params[i].type = currParam->data.param.type;
         currParam = currParam->next;
     }
-    return SEM_OK;
+    return OK;
 }
 
 /**
@@ -236,16 +226,16 @@ static int fillFuncParams(symtableItem *funcInTable, ASTNode *firstParam, size_t
  *
  * @param ctx       Pointer to the semantic analysis context.
  * @param functions Pointer to the first NODE_FUNC_DEF in the program.
- * @return SEM_OK on success, or an appropriate semantic error code (3, 4, 5, 6, 99).
+ * @return OK on success, or an appropriate semantic error code (3, 4, 5, 6, 99).
  */
-static int collectAllFunc(SemanticContext *ctx, ASTNode *functions) {
+static uint8_t collectAllFunc(SemanticContext *ctx, ASTNode *functions) {
     bool mainExist = false;
     ASTNode *curr = functions;
 
     while (curr != NULL) {
         /// Redefinition of an existing user or built-in function -> Error 4
         if (symtableFind(ctx->globalFuncTable, curr->data.funcDef.name) != NULL) {
-            return ERR_SEM_REDEF;
+            return ERR_SEM_REDEFINITION;
         }
 
         symtableItem *funcInTable =
@@ -255,7 +245,6 @@ static int collectAllFunc(SemanticContext *ctx, ASTNode *functions) {
         }
 
         /// Link the AST node and the symbol table entry in both directions
-        curr->symbol = funcInTable;
         funcInTable->kind = SYM_FUNC;
         funcInTable->data.func.node = curr;
         funcInTable->data.func.isBuiltin = false;
@@ -274,10 +263,10 @@ static int collectAllFunc(SemanticContext *ctx, ASTNode *functions) {
         /// Enforce constraints for the @main entry function
         if (curr->data.funcDef.isMain) {
             if (mainExist) {
-                return ERR_SEM_REDEF; /// Error 4: Multiple @main entry functions
+                return ERR_SEM_REDEFINITION; /// Error 4: Multiple @main entry functions
             }
             if (paramCnt != 0) {
-                return ERR_SEM_PARAMS; /// Error 5: @main must not have parameters
+                return ERR_SEM_ARGUMENTS; /// Error 5: @main must not have parameters
             }
             if (curr->data.funcDef.returnType != TYPE_UNKNOWN &&
                 curr->data.funcDef.returnType != TYPE_UNIT) {
@@ -286,8 +275,8 @@ static int collectAllFunc(SemanticContext *ctx, ASTNode *functions) {
             mainExist = true;
         }
 
-        int err = fillFuncParams(funcInTable, curr->data.funcDef.params, paramCnt);
-        if (err != SEM_OK) {
+        uint8_t err = fillFuncParams(funcInTable, curr->data.funcDef.params, paramCnt);
+        if (err != OK) {
             return err;
         }
         curr = curr->next;
@@ -295,12 +284,13 @@ static int collectAllFunc(SemanticContext *ctx, ASTNode *functions) {
 
     /// Missing @main entry function in the program -> Error 3
     if (!mainExist) {
-        return ERR_SEM_UNDEF;
+        return ERR_SEM_UNDEFINED;
     }
-    return SEM_OK;
+    return OK;
 }
 
-static int evaluateExpresion(SemanticContext *ctx, ASTNode *expr, dataType *outType, bool isCond);
+static uint8_t evaluateExpresion(SemanticContext *ctx, ASTNode *expr, dataType *outType,
+                                 bool isCond);
 
 /**
  * @brief Validates operand types for the binary '+' operator (numeric addition or string
@@ -311,10 +301,10 @@ static int evaluateExpresion(SemanticContext *ctx, ASTNode *expr, dataType *outT
  * @param left  Left operand AST node.
  * @param rType Evaluated type of the right operand.
  * @param lType Evaluated type of the left operand.
- * @return SEM_OK if valid, ERR_SEM_TYPE (6) on incompatible operand types.
+ * @return OK if valid, ERR_SEM_TYPE (6) on incompatible operand types.
  */
-static int evaluateAddOp(ASTNode *expr, ASTNode *right, ASTNode *left, dataType rType,
-                         dataType lType) {
+static uint8_t evaluateAddOp(ASTNode *expr, ASTNode *right, ASTNode *left, dataType rType,
+                             dataType lType) {
     if (lType == TYPE_STRING && rType == TYPE_STRING) {
         expr->semanticType = TYPE_STRING;
     } else if (lType == TYPE_INT && rType == TYPE_INT) {
@@ -330,7 +320,7 @@ static int evaluateAddOp(ASTNode *expr, ASTNode *right, ASTNode *left, dataType 
     } else {
         return ERR_SEM_TYPE;
     }
-    return SEM_OK;
+    return OK;
 }
 
 /**
@@ -341,10 +331,10 @@ static int evaluateAddOp(ASTNode *expr, ASTNode *right, ASTNode *left, dataType 
  * @param left  Left operand AST node.
  * @param rType Evaluated type of the right operand.
  * @param lType Evaluated type of the left operand.
- * @return SEM_OK if valid, ERR_SEM_TYPE (6) on non-numeric operand types.
+ * @return OK if valid, ERR_SEM_TYPE (6) on non-numeric operand types.
  */
-static int evaluateSubOp(ASTNode *expr, ASTNode *right, ASTNode *left, dataType rType,
-                         dataType lType) {
+static uint8_t evaluateSubOp(ASTNode *expr, ASTNode *right, ASTNode *left, dataType rType,
+                             dataType lType) {
     if (lType == TYPE_INT && rType == TYPE_INT) {
         expr->semanticType = TYPE_INT;
     } else if (lType == TYPE_DOUBLE && rType == TYPE_DOUBLE) {
@@ -358,7 +348,7 @@ static int evaluateSubOp(ASTNode *expr, ASTNode *right, ASTNode *left, dataType 
     } else {
         return ERR_SEM_TYPE;
     }
-    return SEM_OK;
+    return OK;
 }
 
 /**
@@ -370,10 +360,10 @@ static int evaluateSubOp(ASTNode *expr, ASTNode *right, ASTNode *left, dataType 
  * @param rType  Evaluated type of the right operand.
  * @param lType  Evaluated type of the left operand.
  * @param isCond True if the expression is the root of an `if` or `while` condition.
- * @return SEM_OK if valid, ERR_SEM_TYPE (6) otherwise.
+ * @return OK if valid, ERR_SEM_TYPE (6) otherwise.
  */
-static int evaluateNonEqRelOp(ASTNode *expr, ASTNode *right, ASTNode *left, dataType rType,
-                              dataType lType, bool isCond) {
+static uint8_t evaluateNonEqRelOp(ASTNode *expr, ASTNode *right, ASTNode *left, dataType rType,
+                                  dataType lType, bool isCond) {
     /// Relational operators are only permitted inside conditions without BOOLTHEN
     if (!isCond) {
         return ERR_SEM_TYPE;
@@ -391,7 +381,7 @@ static int evaluateNonEqRelOp(ASTNode *expr, ASTNode *right, ASTNode *left, data
     } else {
         return ERR_SEM_TYPE;
     }
-    return SEM_OK;
+    return OK;
 }
 
 /**
@@ -403,27 +393,27 @@ static int evaluateNonEqRelOp(ASTNode *expr, ASTNode *right, ASTNode *left, data
  * @param rType  Evaluated type of the right operand.
  * @param lType  Evaluated type of the left operand.
  * @param isCond True if the expression is the root of an `if` or `while` condition.
- * @return SEM_OK if valid, ERR_SEM_TYPE (6) otherwise.
+ * @return OK if valid, ERR_SEM_TYPE (6) otherwise.
  */
-static int evaluateEq(ASTNode *expr, ASTNode *right, ASTNode *left, dataType rType, dataType lType,
-                      bool isCond) {
+static uint8_t evaluateEq(ASTNode *expr, ASTNode *right, ASTNode *left, dataType rType,
+                          dataType lType, bool isCond) {
     if (!isCond) {
         return ERR_SEM_TYPE;
     }
     if (lType == rType && lType != TYPE_BOOL && lType != TYPE_UNKNOWN) {
         expr->semanticType = TYPE_BOOL;
-        return SEM_OK;
+        return OK;
     }
     /// Allow comparing Int and Double via implicit Int -> Double promotion
     if (lType == TYPE_INT && rType == TYPE_DOUBLE) {
         left->convertToDouble = true;
         expr->semanticType = TYPE_BOOL;
-        return SEM_OK;
+        return OK;
     }
     if (lType == TYPE_DOUBLE && rType == TYPE_INT) {
         right->convertToDouble = true;
         expr->semanticType = TYPE_BOOL;
-        return SEM_OK;
+        return OK;
     }
     return ERR_SEM_TYPE;
 }
@@ -435,9 +425,9 @@ static int evaluateEq(ASTNode *expr, ASTNode *right, ASTNode *left, dataType rTy
  * @param expr    Binary operation AST node.
  * @param outType Output pointer receiving the resulting type of the expression.
  * @param isCond  True if evaluating the top-level condition of an `if` or `while` statement.
- * @return SEM_OK on success, or an error code on invalid sub-expressions or operand types.
+ * @return OK on success, or an error code on invalid sub-expressions or operand types.
  */
-static int evaluateBinOp(SemanticContext *ctx, ASTNode *expr, dataType *outType, bool isCond) {
+static uint8_t evaluateBinOp(SemanticContext *ctx, ASTNode *expr, dataType *outType, bool isCond) {
     ASTNode *left = expr->data.binOp.left;
     ASTNode *right = expr->data.binOp.right;
     dataType lType = TYPE_UNKNOWN;
@@ -445,12 +435,12 @@ static int evaluateBinOp(SemanticContext *ctx, ASTNode *expr, dataType *outType,
 
     /// Sub-operands of a binary operator cannot be relational expressions themselves (without
     /// BOOLTHEN)
-    int err = evaluateExpresion(ctx, left, &lType, false);
-    if (err != SEM_OK) {
+    uint8_t err = evaluateExpresion(ctx, left, &lType, false);
+    if (err != OK) {
         return err;
     }
     err = evaluateExpresion(ctx, right, &rType, false);
-    if (err != SEM_OK) {
+    if (err != OK) {
         return err;
     }
 
@@ -468,15 +458,15 @@ static int evaluateBinOp(SemanticContext *ctx, ASTNode *expr, dataType *outType,
         return ERR_INTERNAL;
     }
 
-    if (err != SEM_OK) {
+    if (err != OK) {
         return err;
     }
 
     *outType = expr->semanticType;
-    return SEM_OK;
+    return OK;
 }
 
-static int checkFunction(symtableItem *func, SemanticContext *ctx);
+static uint8_t checkFunction(symtableItem *func, SemanticContext *ctx);
 
 /**
  * @brief Validates a function call (`NODE_FUNC_CALL`), checking argument count and types.
@@ -487,12 +477,12 @@ static int checkFunction(symtableItem *func, SemanticContext *ctx);
  * @param ctx     Pointer to the semantic analysis context.
  * @param expr    Function call AST node.
  * @param outType Output pointer receiving the return type of the called function.
- * @return SEM_OK on success, ERR_SEM_UNDEF (3), ERR_SEM_PARAMS (5), or ERR_SEM_TYPE (6).
+ * @return OK on success, ERR_SEM_UNDEFINED (3), ERR_SEM_ARGUMENTS (5), or ERR_SEM_TYPE (6).
  */
-static int evaluateFuncCall(SemanticContext *ctx, ASTNode *expr, dataType *outType) {
+static uint8_t evaluateFuncCall(SemanticContext *ctx, ASTNode *expr, dataType *outType) {
     symtableItem *func = symtableFind(ctx->globalFuncTable, expr->data.funcCall.funcName);
     if (func == NULL) {
-        return ERR_SEM_UNDEF; /// Error 3: Calling an undefined function
+        return ERR_SEM_UNDEFINED; /// Error 3: Calling an undefined function
     }
 
     /// 1. Evaluate all argument expressions and count them
@@ -500,8 +490,8 @@ static int evaluateFuncCall(SemanticContext *ctx, ASTNode *expr, dataType *outTy
     ASTNode *arg = expr->data.funcCall.args;
     while (arg != NULL) {
         dataType argType = TYPE_UNKNOWN;
-        int err = evaluateExpresion(ctx, arg, &argType, false);
-        if (err != SEM_OK) {
+        uint8_t err = evaluateExpresion(ctx, arg, &argType, false);
+        if (err != OK) {
             return err;
         }
         argCount++;
@@ -510,30 +500,29 @@ static int evaluateFuncCall(SemanticContext *ctx, ASTNode *expr, dataType *outTy
 
     /// 2. Verify argument count -> Error 5 on mismatch
     if (argCount != func->data.func.paramCount) {
-        return ERR_SEM_PARAMS;
+        return ERR_SEM_ARGUMENTS;
     }
 
     /// 3. Verify argument types against formal parameters -> Error 5 on mismatch
     arg = expr->data.funcCall.args;
     for (size_t i = 0; i < argCount; i++) {
         if (!canAssignOrConvert(func->data.func.params[i].type, arg)) {
-            return ERR_SEM_PARAMS;
+            return ERR_SEM_ARGUMENTS;
         }
         arg = arg->next;
     }
 
     /// 4. If the callee's return type must be inferred, analyze the callee now (on-demand)
     if (!func->data.func.hasExplicitReturnType && !func->data.func.isEvaluated) {
-        int err = checkFunction(func, ctx);
-        if (err != SEM_OK) {
+        uint8_t err = checkFunction(func, ctx);
+        if (err != OK) {
             return err;
         }
     }
 
-    expr->symbol = func;
     expr->semanticType = func->data.func.returnType;
     *outType = func->data.func.returnType;
-    return SEM_OK;
+    return OK;
 }
 
 /**
@@ -541,12 +530,12 @@ static int evaluateFuncCall(SemanticContext *ctx, ASTNode *expr, dataType *outTy
  *
  * @param expr    Literal AST node.
  * @param outType Output pointer receiving the literal's data type.
- * @return Always SEM_OK.
+ * @return Always OK.
  */
-static int evaluateLiteral(ASTNode *expr, dataType *outType) {
+static uint8_t evaluateLiteral(ASTNode *expr, dataType *outType) {
     expr->semanticType = expr->data.literal.litType;
     *outType = expr->semanticType;
-    return SEM_OK;
+    return OK;
 }
 
 /**
@@ -555,17 +544,16 @@ static int evaluateLiteral(ASTNode *expr, dataType *outType) {
  * @param ctx     Pointer to the semantic analysis context.
  * @param expr    Variable reference AST node.
  * @param outType Output pointer receiving the variable's data type.
- * @return SEM_OK if found, ERR_SEM_UNDEF (3) if the variable is undefined.
+ * @return OK if found, ERR_SEM_UNDEFINED (3) if the variable is undefined.
  */
-static int evaluateVarRef(SemanticContext *ctx, ASTNode *expr, dataType *outType) {
+static uint8_t evaluateVarRef(SemanticContext *ctx, ASTNode *expr, dataType *outType) {
     symtableItem *item = findVarInScopes(ctx->localScopeStack, expr->data.varRef.name);
     if (item == NULL) {
-        return ERR_SEM_UNDEF; /// Error 3: Undefined variable
+        return ERR_SEM_UNDEFINED; /// Error 3: Undefined variable
     }
     expr->semanticType = item->data.var.type;
-    expr->symbol = item;
     *outType = item->data.var.type;
-    return SEM_OK;
+    return OK;
 }
 
 /**
@@ -574,13 +562,13 @@ static int evaluateVarRef(SemanticContext *ctx, ASTNode *expr, dataType *outType
  * @param ctx     Pointer to the semantic analysis context.
  * @param expr    Unary operator AST node.
  * @param outType Output pointer receiving the operand's numeric type.
- * @return SEM_OK if the operand is Int or Double, ERR_SEM_TYPE (6) otherwise.
+ * @return OK if the operand is Int or Double, ERR_SEM_TYPE (6) otherwise.
  */
-static int evaluateUnOp(SemanticContext *ctx, ASTNode *expr, dataType *outType) {
+static uint8_t evaluateUnOp(SemanticContext *ctx, ASTNode *expr, dataType *outType) {
     dataType opType = TYPE_UNKNOWN;
     /// Evaluate the inner operand, NOT `expr` itself!
-    int err = evaluateExpresion(ctx, expr->data.unaryOp.operand, &opType, false);
-    if (err != SEM_OK) {
+    uint8_t err = evaluateExpresion(ctx, expr->data.unaryOp.operand, &opType, false);
+    if (err != OK) {
         return err;
     }
     if (opType != TYPE_INT && opType != TYPE_DOUBLE) {
@@ -588,7 +576,7 @@ static int evaluateUnOp(SemanticContext *ctx, ASTNode *expr, dataType *outType) 
     }
     expr->semanticType = opType;
     *outType = opType;
-    return SEM_OK;
+    return OK;
 }
 
 /**
@@ -598,9 +586,10 @@ static int evaluateUnOp(SemanticContext *ctx, ASTNode *expr, dataType *outType) 
  * @param expr    Root node of the expression to evaluate.
  * @param outType Output pointer receiving the resulting type of the expression.
  * @param isCond  True if the expression is the top-level condition of an `if` or `while`.
- * @return SEM_OK on success, or the corresponding semantic error code.
+ * @return OK on success, or the corresponding semantic error code.
  */
-static int evaluateExpresion(SemanticContext *ctx, ASTNode *expr, dataType *outType, bool isCond) {
+static uint8_t evaluateExpresion(SemanticContext *ctx, ASTNode *expr, dataType *outType,
+                                 bool isCond) {
     if (expr == NULL) {
         return ERR_INTERNAL;
     }
@@ -632,23 +621,23 @@ static int evaluateExpresion(SemanticContext *ctx, ASTNode *expr, dataType *outT
  *
  * @param ctx  Pointer to the semantic analysis context.
  * @param decl Variable declaration AST node (`NODE_VAR_DECL`).
- * @return SEM_OK on success, ERR_SEM_REDEF (4), ERR_SEM_TYPE (6), or ERR_INTERNAL (99).
+ * @return OK on success, ERR_SEM_REDEFINITION (4), ERR_SEM_TYPE (6), or ERR_INTERNAL (99).
  */
-static int checkVarDecl(SemanticContext *ctx, ASTNode *decl) {
+static uint8_t checkVarDecl(SemanticContext *ctx, ASTNode *decl) {
     Symtable *currScope = ctx->localScopeStack->symtable;
 
     /// Redefinition in the exact same block (or shadowing a function parameter in top body) ->
     /// Error
     /// 4
     if (symtableFind(currScope, decl->data.varDecl.name) != NULL) {
-        return ERR_SEM_REDEF;
+        return ERR_SEM_REDEFINITION;
     }
 
     /// Evaluate the right-hand side initialization expression BEFORE adding the variable to the
     /// scope
     dataType rightHandType = TYPE_UNKNOWN;
-    int err = evaluateExpresion(ctx, decl->data.varDecl.initExpr, &rightHandType, false);
-    if (err != SEM_OK) {
+    uint8_t err = evaluateExpresion(ctx, decl->data.varDecl.initExpr, &rightHandType, false);
+    if (err != OK) {
         return err;
     }
 
@@ -676,9 +665,8 @@ static int checkVarDecl(SemanticContext *ctx, ASTNode *decl) {
     var->kind = SYM_VAR;
     var->data.var.type = finalType;
     var->data.var.isMutable = decl->data.varDecl.isMutable;
-    decl->symbol = var;
     decl->semanticType = TYPE_UNIT; /// A declaration statement evaluates to () (Unit) in a block
-    return SEM_OK;
+    return OK;
 }
 
 /**
@@ -687,20 +675,20 @@ static int checkVarDecl(SemanticContext *ctx, ASTNode *decl) {
  *
  * @param ctx    Pointer to the semantic analysis context.
  * @param assign Assignment AST node.
- * @return SEM_OK on success, ERR_SEM_UNDEF (3), ERR_SEM_TYPE (6), or ERR_SEM_IMMUTABLE (7).
+ * @return OK on success, ERR_SEM_UNDEFINED (3), ERR_SEM_TYPE (6), or ERR_SEM_IMMUTABLE (7).
  */
-static int checkAssign(SemanticContext *ctx, ASTNode *assign) {
+static uint8_t checkAssign(SemanticContext *ctx, ASTNode *assign) {
     symtableItem *var = findVarInScopes(ctx->localScopeStack, assign->data.assign.targetName);
     if (var == NULL) {
-        return ERR_SEM_UNDEF; /// Error 3: Assigning to an undefined variable
+        return ERR_SEM_UNDEFINED; /// Error 3: Assigning to an undefined variable
     }
     if (!var->data.var.isMutable) {
         return ERR_SEM_IMMUTABLE; /// Error 7: Assigning to a 'val' or formal parameter
     }
 
     dataType exprType = TYPE_UNKNOWN;
-    int err = evaluateExpresion(ctx, assign->data.assign.expr, &exprType, false);
-    if (err != SEM_OK) {
+    uint8_t err = evaluateExpresion(ctx, assign->data.assign.expr, &exprType, false);
+    if (err != OK) {
         return err;
     }
 
@@ -708,9 +696,8 @@ static int checkAssign(SemanticContext *ctx, ASTNode *assign) {
         return ERR_SEM_TYPE; /// Error 6: Incompatible type in assignment
     }
 
-    assign->symbol = var;
     assign->semanticType = TYPE_UNIT;
-    return SEM_OK;
+    return OK;
 }
 
 /**
@@ -721,9 +708,9 @@ static int checkAssign(SemanticContext *ctx, ASTNode *assign) {
  *
  * @param ctx Pointer to the semantic analysis context.
  * @param ret Return statement AST node.
- * @return SEM_OK on success, or ERR_SEM_TYPE (6) if return rules are violated.
+ * @return OK on success, or ERR_SEM_TYPE (6) if return rules are violated.
  */
-static int checkReturn(SemanticContext *ctx, ASTNode *ret) {
+static uint8_t checkReturn(SemanticContext *ctx, ASTNode *ret) {
     symtableItem *func = ctx->currentFunc;
 
     /// Rule (Sec. 2.3): A function containing 'return' MUST have an explicit return type in its
@@ -742,12 +729,12 @@ static int checkReturn(SemanticContext *ctx, ASTNode *ret) {
         }
         func->data.func.hasReturnStmt = true;
         ret->semanticType = TYPE_UNIT;
-        return SEM_OK;
+        return OK;
     }
 
     dataType exprType = TYPE_UNKNOWN;
-    int err = evaluateExpresion(ctx, expr, &exprType, false);
-    if (err != SEM_OK) {
+    uint8_t err = evaluateExpresion(ctx, expr, &exprType, false);
+    if (err != OK) {
         return err;
     }
 
@@ -763,22 +750,22 @@ static int checkReturn(SemanticContext *ctx, ASTNode *ret) {
 
     func->data.func.hasReturnStmt = true;
     ret->semanticType = TYPE_UNIT;
-    return SEM_OK;
+    return OK;
 }
 
-static int checkBlock(SemanticContext *ctx, ASTNode *block);
+static uint8_t checkBlock(SemanticContext *ctx, ASTNode *block);
 
 /**
  * @brief Validates an `if-then-else` statement (`NODE_IF`) and both of its branch blocks.
  *
  * @param ctx  Pointer to the semantic analysis context.
  * @param stmt If statement AST node.
- * @return SEM_OK on success, or a semantic error code.
+ * @return OK on success, or a semantic error code.
  */
-static int checkIfStmt(SemanticContext *ctx, ASTNode *stmt) {
+static uint8_t checkIfStmt(SemanticContext *ctx, ASTNode *stmt) {
     dataType condType = TYPE_UNKNOWN;
-    int err = evaluateExpresion(ctx, stmt->data.ifStmt.condition, &condType, true);
-    if (err != SEM_OK) {
+    uint8_t err = evaluateExpresion(ctx, stmt->data.ifStmt.condition, &condType, true);
+    if (err != OK) {
         return err;
     }
 
@@ -787,17 +774,17 @@ static int checkIfStmt(SemanticContext *ctx, ASTNode *stmt) {
     }
 
     err = checkBlock(ctx, stmt->data.ifStmt.thenBlock);
-    if (err != SEM_OK) {
+    if (err != OK) {
         return err;
     }
 
     err = checkBlock(ctx, stmt->data.ifStmt.elseBlock);
-    if (err != SEM_OK) {
+    if (err != OK) {
         return err;
     }
 
     stmt->semanticType = TYPE_UNIT;
-    return SEM_OK;
+    return OK;
 }
 
 /**
@@ -805,12 +792,12 @@ static int checkIfStmt(SemanticContext *ctx, ASTNode *stmt) {
  *
  * @param ctx  Pointer to the semantic analysis context.
  * @param stmt While statement AST node.
- * @return SEM_OK on success, or a semantic error code.
+ * @return OK on success, or a semantic error code.
  */
-static int checkWhileStmt(SemanticContext *ctx, ASTNode *stmt) {
+static uint8_t checkWhileStmt(SemanticContext *ctx, ASTNode *stmt) {
     dataType condType = TYPE_UNKNOWN;
-    int err = evaluateExpresion(ctx, stmt->data.whileStmt.condition, &condType, true);
-    if (err != SEM_OK) {
+    uint8_t err = evaluateExpresion(ctx, stmt->data.whileStmt.condition, &condType, true);
+    if (err != OK) {
         return err;
     }
 
@@ -819,12 +806,12 @@ static int checkWhileStmt(SemanticContext *ctx, ASTNode *stmt) {
     }
 
     err = checkBlock(ctx, stmt->data.whileStmt.bodyBlock);
-    if (err != SEM_OK) {
+    if (err != OK) {
         return err;
     }
 
     stmt->semanticType = TYPE_UNIT;
-    return SEM_OK;
+    return OK;
 }
 
 /**
@@ -832,11 +819,11 @@ static int checkWhileStmt(SemanticContext *ctx, ASTNode *stmt) {
  *
  * @param ctx  Pointer to the semantic analysis context.
  * @param stmt Statement AST node to validate.
- * @return SEM_OK on success, or a semantic error code.
+ * @return OK on success, or a semantic error code.
  */
-static int checkStmt(SemanticContext *ctx, ASTNode *stmt) {
+static uint8_t checkStmt(SemanticContext *ctx, ASTNode *stmt) {
     if (stmt == NULL) {
-        return SEM_OK;
+        return OK;
     }
 
     switch (stmt->type) {
@@ -869,12 +856,12 @@ static int checkStmt(SemanticContext *ctx, ASTNode *stmt) {
  *
  * @param ctx   Pointer to the semantic analysis context.
  * @param block Pointer to the block wrapper or the first statement of the block.
- * @return SEM_OK on success, or the first encountered semantic error code.
+ * @return OK on success, or the first encountered semantic error code.
  */
-static int checkBlock(SemanticContext *ctx, ASTNode *block) {
+static uint8_t checkBlock(SemanticContext *ctx, ASTNode *block) {
     ASTNode *curr = unwrapBlock(block);
     if (curr == NULL) {
-        return SEM_OK;
+        return OK;
     }
 
     /// Create and push a new symbol table for this block's lexical scope (prime capacity 37)
@@ -884,10 +871,10 @@ static int checkBlock(SemanticContext *ctx, ASTNode *block) {
     }
     push(scope, &ctx->localScopeStack);
 
-    int err = SEM_OK;
+    uint8_t err = OK;
     while (curr != NULL) {
         err = checkStmt(ctx, curr);
-        if (err != SEM_OK) {
+        if (err != OK) {
             break;
         }
         curr = curr->next;
@@ -911,17 +898,17 @@ static int checkBlock(SemanticContext *ctx, ASTNode *block) {
  * @param outType      Output pointer receiving the resulting type of the block's tail.
  * @param outLastExpr  Output pointer receiving the final expression node (for Int -> Double
  * conversion).
- * @return SEM_OK on success, or ERR_SEM_TYPE (6) if an `if-else` tail violates Rule 3.
+ * @return OK on success, or ERR_SEM_TYPE (6) if an `if-else` tail violates Rule 3.
  */
-static int checkFunctionTail(ASTNode *body, symtableItem *func, bool *outAllreturn,
-                             dataType *outType, ASTNode **outLastExpr) {
+static uint8_t checkFunctionTail(ASTNode *body, symtableItem *func, bool *outAllreturn,
+                                 dataType *outType, ASTNode **outLastExpr) {
     *outLastExpr = NULL;
     ASTNode *curr = unwrapBlock(body);
 
     if (curr == NULL) {
         *outAllreturn = false;
         *outType = TYPE_UNIT;
-        return SEM_OK;
+        return OK;
     }
 
     /// Advance to the very last statement in the block's linked list
@@ -933,7 +920,7 @@ static int checkFunctionTail(ASTNode *body, symtableItem *func, bool *outAllretu
     case NODE_RETURN:
         *outAllreturn = true;
         *outType = TYPE_UNIT;
-        return SEM_OK;
+        return OK;
 
     /// Rule 2: A block ending with a variable declaration, assignment, or while loop has result ()
     /// (Unit)
@@ -942,7 +929,7 @@ static int checkFunctionTail(ASTNode *body, symtableItem *func, bool *outAllretu
     case NODE_VAR_DECL:
         *outAllreturn = false;
         *outType = TYPE_UNIT;
-        return SEM_OK;
+        return OK;
 
     /// Rule 3: A block ending with an if-else statement
     case NODE_IF: {
@@ -952,13 +939,14 @@ static int checkFunctionTail(ASTNode *body, symtableItem *func, bool *outAllretu
         bool elseRet = false;
         ASTNode *noUse = NULL;
 
-        int err = checkFunctionTail(curr->data.ifStmt.thenBlock, func, &thenRet, &thenType, &noUse);
-        if (err != SEM_OK) {
+        uint8_t err =
+            checkFunctionTail(curr->data.ifStmt.thenBlock, func, &thenRet, &thenType, &noUse);
+        if (err != OK) {
             return err;
         }
 
         err = checkFunctionTail(curr->data.ifStmt.elseBlock, func, &elseRet, &elseType, &noUse);
-        if (err != SEM_OK) {
+        if (err != OK) {
             return err;
         }
 
@@ -966,18 +954,18 @@ static int checkFunctionTail(ASTNode *body, symtableItem *func, bool *outAllretu
 
         if (*outAllreturn) {
             *outType = func->data.func.returnType;
-            return SEM_OK;
+            return OK;
         }
 
         if (func->data.func.hasExplicitReturnType && func->data.func.returnType == TYPE_UNIT) {
             *outType = TYPE_UNIT;
-            return SEM_OK;
+            return OK;
         }
 
         if (!func->data.func.hasExplicitReturnType && thenType == TYPE_UNIT &&
             elseType == TYPE_UNIT) {
             *outType = TYPE_UNIT;
-            return SEM_OK;
+            return OK;
         }
         return ERR_SEM_TYPE; /// Error 6: Invalid if-else at the end of a function
     }
@@ -987,7 +975,7 @@ static int checkFunctionTail(ASTNode *body, symtableItem *func, bool *outAllretu
         *outAllreturn = false;
         *outType = curr->semanticType;
         *outLastExpr = curr;
-        return SEM_OK;
+        return OK;
     }
 }
 
@@ -996,22 +984,22 @@ static int checkFunctionTail(ASTNode *body, symtableItem *func, bool *outAllretu
  *
  * @param func     Symbol table entry of the analyzed function.
  * @param funcNode AST node of the function definition (`NODE_FUNC_DEF`).
- * @return SEM_OK on success, or ERR_SEM_TYPE (6) on return type mismatch / failed inference.
+ * @return OK on success, or ERR_SEM_TYPE (6) on return type mismatch / failed inference.
  */
-static int checkFuncReturn(symtableItem *func, ASTNode *funcNode) {
+static uint8_t checkFuncReturn(symtableItem *func, ASTNode *funcNode) {
     dataType outType = TYPE_UNIT;
     ASTNode *lastExpr = NULL;
     bool allPathsReturn = false;
 
-    int err =
+    uint8_t err =
         checkFunctionTail(funcNode->data.funcDef.body, func, &allPathsReturn, &outType, &lastExpr);
-    if (err != SEM_OK) {
+    if (err != OK) {
         return err;
     }
 
     /// If all execution paths ended with an explicit 'return', checkReturn() already validated them
     if (allPathsReturn) {
-        return SEM_OK;
+        return OK;
     }
 
     if (func->data.func.hasExplicitReturnType) {
@@ -1021,7 +1009,7 @@ static int checkFuncReturn(symtableItem *func, ASTNode *funcNode) {
             if (outType == TYPE_BOOL) {
                 return ERR_SEM_TYPE;
             }
-            return SEM_OK;
+            return OK;
         }
         /// Function explicitly returns Int/Double/String -> must end with a compatible expression
         if (lastExpr == NULL || !canAssignOrConvert(func->data.func.returnType, lastExpr)) {
@@ -1039,7 +1027,7 @@ static int checkFuncReturn(symtableItem *func, ASTNode *funcNode) {
         func->data.func.returnType = outType;
         funcNode->data.funcDef.returnType = outType;
     }
-    return SEM_OK;
+    return OK;
 }
 
 /**
@@ -1052,11 +1040,11 @@ static int checkFuncReturn(symtableItem *func, ASTNode *funcNode) {
  *
  * @param func Symbol table entry of the function to analyze.
  * @param ctx  Pointer to the semantic analysis context.
- * @return SEM_OK on success, or a semantic error code.
+ * @return OK on success, or a semantic error code.
  */
-static int checkFunction(symtableItem *func, SemanticContext *ctx) {
+static uint8_t checkFunction(symtableItem *func, SemanticContext *ctx) {
     if (func->data.func.isEvaluated) {
-        return SEM_OK;
+        return OK;
     }
 
     /// Detect direct or mutual recursion: recursive functions MUST have an explicit return type
@@ -1064,7 +1052,7 @@ static int checkFunction(symtableItem *func, SemanticContext *ctx) {
         if (!func->data.func.hasExplicitReturnType) {
             return ERR_SEM_TYPE; /// Error 6
         }
-        return SEM_OK;
+        return OK;
     }
 
     func->data.func.beingEvaluated = true;
@@ -1089,7 +1077,7 @@ static int checkFunction(symtableItem *func, SemanticContext *ctx) {
     }
     push(scope, &ctx->localScopeStack);
 
-    int err = SEM_OK;
+    uint8_t err = OK;
     for (size_t i = 0; i < func->data.func.paramCount; i++) {
         symtableItem *paramVar = symtableLookupAdd(scope, func->data.func.params[i].name);
         if (paramVar == NULL) {
@@ -1103,7 +1091,7 @@ static int checkFunction(symtableItem *func, SemanticContext *ctx) {
 
     /// unwrapBlock handles both NODE_BLOCK and a direct pointer to the first statement
     ASTNode *curr = unwrapBlock(funcNode->data.funcDef.body);
-    while (err == SEM_OK && curr != NULL) {
+    while (err == OK && curr != NULL) {
         err = checkStmt(ctx, curr);
         curr = curr->next;
     }
@@ -1114,7 +1102,7 @@ static int checkFunction(symtableItem *func, SemanticContext *ctx) {
     ctx->currentFunc = prevFunc;
     ctx->localScopeStack = prevStack;
 
-    if (err != SEM_OK) {
+    if (err != OK) {
         func->data.func.beingEvaluated = false;
         return err;
     }
@@ -1122,7 +1110,7 @@ static int checkFunction(symtableItem *func, SemanticContext *ctx) {
     err = checkFuncReturn(func, funcNode);
     func->data.func.beingEvaluated = false;
 
-    if (err == SEM_OK) {
+    if (err == OK) {
         func->data.func.isEvaluated = true;
     }
     return err;
@@ -1136,9 +1124,9 @@ static int checkFunction(symtableItem *func, SemanticContext *ctx) {
  *          2. Performs deep semantic and type checking on every function body.
  *
  * @param program Pointer to the root `NODE_PROGRAM` AST node.
- * @return SEM_OK (0) if the program is semantically valid, or an IFJ26 error code (3-7, 10, 99).
+ * @return OK (0) if the program is semantically valid, or an IFJ26 error code (3-7, 10, 99).
  */
-int semantAnalyse(ASTNode *program) {
+uint8_t semantAnalyse(ASTNode *program) {
     if (program == NULL || program->type != NODE_PROGRAM) {
         return ERR_INTERNAL;
     }
@@ -1153,18 +1141,21 @@ int semantAnalyse(ASTNode *program) {
     }
 
     /// Pass 1: Register built-ins and collect all function signatures
-    int err = registerBuiltins(ctx.globalFuncTable);
-    if (err == SEM_OK) {
+    uint8_t err = registerBuiltins(ctx.globalFuncTable);
+    if (err == OK) {
         err = collectAllFunc(&ctx, program->data.program.functions);
     }
 
     /// Pass 2: Validate all user-defined function bodies
     ASTNode *curr = program->data.program.functions;
-    while (err == SEM_OK && curr != NULL) {
-        err = checkFunction(curr->symbol, &ctx);
+    while (err == OK && curr != NULL) {
+        symtableItem *func = symtableFind(ctx.globalFuncTable, curr->data.funcDef.name);
+        if (func == NULL) {
+            return ERR_INTERNAL;
+        }
+        err = checkFunction(func, &ctx);
         curr = curr->next;
     }
-
     symtableFree(ctx.globalFuncTable);
     return err;
 }

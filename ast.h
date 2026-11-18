@@ -67,7 +67,6 @@ struct ASTNode {
                       /// a block, next argument, next parameter
     /// semantic information to be filled during semantical analysis
     dataType semanticType; /// Final data type of node
-    symtableItem *symbol;  /// pointer to symtable to the specific symbol
     bool convertToDouble;  /// for code generetor when it should call int->float
     /// Specific data for each node type
     union { /// data

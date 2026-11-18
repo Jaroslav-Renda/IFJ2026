@@ -44,13 +44,21 @@ void symtableFree(Symtable *table) {
         return;
     }
     for (size_t i = 0; i < table->capacity; i++) {
+        if (table->items[i].key != NULL && table->items[i].kind == SYM_FUNC) {
+            free(table->items[i].data.func.params);
+        }
         free(table->items[i].key);
     }
     free(table->items);
     free(table);
 }
 
-size_t symtableHashFunction(symtableKeyT key) {
+/**
+ * @brief Symtable hash func implemeted as sdbm
+ * @param key key to be hashed
+ * @return index on which our item is located in our array
+ */
+static size_t symtableHashFunction(symtableKeyT key) {
     size_t hash = 0;
     const unsigned char *ptr;
     for (ptr = (const unsigned char *)key; *ptr != '\0'; ptr++) {
@@ -59,6 +67,56 @@ size_t symtableHashFunction(symtableKeyT key) {
     return hash;
 }
 
+/**
+ * @brief Checks if used slots take more than 60% of space
+ * @param table
+ * @return True if we need to rehash false otherwise
+ */
+static bool checkForRehash(Symtable const *table) {
+    return (table->usedSlots * 10 >= table->capacity * REHASH_LIMIT);
+}
+
+/**
+ * @brief Funciton for rehasimg the item array with double capacity
+ * @param table
+ * @return True if succes
+ */
+static bool rehash(Symtable *table) {
+    if (table == NULL) {
+        return false;
+    }
+    size_t newCapacity = table->capacity * 2;
+    symtableItem *newItems = calloc(newCapacity, sizeof(symtableItem));
+    if (newItems == NULL) {
+        return false;
+    }
+    for (size_t i = 0; i < newCapacity; i++) {
+        newItems[i].state = SLOT_EMPTY;
+    }
+    for (size_t i = 0; i < table->capacity; i++) {
+        if (table->items[i].state == SLOT_OCCUPIED) {
+            size_t idx = symtableHashFunction(table->items[i].key) % newCapacity;
+            while (newItems[idx].state != SLOT_EMPTY) {
+                idx = (idx + 1) % newCapacity;
+            }
+            newItems[idx] = table->items[i];
+            newItems[idx].state = SLOT_OCCUPIED;
+        }
+    }
+    free(table->items);
+    table->items = newItems;
+    table->capacity = newCapacity;
+    table->usedSlots = table->size;
+    return true;
+}
+
+/**
+ * @brief Initilizes SymtableItem at idx with given key
+ * @param symtable target symtable
+ * @param idx index where you want to place your item
+ * @param key string which you want to add as a key
+ * @return Pointer to the new initalized item or NULL in case of error of malloc
+ */
 static symtableItem *itemInit(Symtable *symtable, size_t idx, const char *key) {
     // TODO nevim jeste co presne mi posle syntax analyzator takze zatim tam
     // hodim jenom klic
@@ -77,6 +135,7 @@ static symtableItem *itemInit(Symtable *symtable, size_t idx, const char *key) {
     symtable->usedSlots++;
     if (checkForRehash(symtable)) {
         rehash(symtable);
+        return symtableFind(symtable, key);
     }
     return &symtable->items[idx];
 }
@@ -125,39 +184,6 @@ symtableItem *symtableFind(Symtable *table, symtableKeyT key) {
         temp = (temp + 1) % table->capacity;
     } while (temp != idx);
     return NULL;
-}
-
-static bool checkForRehash(Symtable const *table) {
-    return (table->usedSlots * 10 >= table->capacity * REHASH_LIMIT);
-}
-
-static bool rehash(Symtable *table) {
-    if (table == NULL) {
-        return false;
-    }
-    size_t newCapacity = table->capacity * 2;
-    symtableItem *newItems = calloc(newCapacity, sizeof(symtableItem));
-    if (newItems == NULL) {
-        return false;
-    }
-    for (size_t i = 0; i < newCapacity; i++) {
-        newItems[i].state = SLOT_EMPTY;
-    }
-    for (size_t i = 0; i < table->capacity; i++) {
-        if (table->items[i].state == SLOT_OCCUPIED) {
-            size_t idx = symtableHashFunction(table->items[i].key) % newCapacity;
-            while (newItems[idx].state != SLOT_EMPTY) {
-                idx = (idx + 1) % newCapacity;
-            }
-            newItems[idx] = table->items[i];
-            newItems[idx].state = SLOT_OCCUPIED;
-        }
-    }
-    free(table->items);
-    table->items = newItems;
-    table->capacity = newCapacity;
-    table->usedSlots = table->size;
-    return true;
 }
 
 void symtablePrint(Symtable const *table) {

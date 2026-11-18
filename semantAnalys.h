@@ -6,12 +6,13 @@
  * @details project: IFJ2026
  */
 
+#ifndef SYMANALYS_H
+#define SYMANALYS_H
 #include "ast.h"
 #include "symtable.h"
 #include "symtableStack.h"
-#ifndef SYMANALYS_H
-#define SYMANALYS_H
+#include <stdint.h>
 
 symtableItem *findVarInScopes(stackPtr stack, const char *identifier);
-int semantAnalyse(ASTNode *program);
+uint8_t semantAnalyse(ASTNode *program);
 #endif // SYMANALYS_H
