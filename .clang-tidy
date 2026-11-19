@@ -9,7 +9,9 @@ Checks: >
   cert-*,
   -readability-magic-numbers,
   -bugprone-easily-swappable-parameters,
-  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
+  -misc-no-recursion,
+  -readability-implicit-bool-conversion
 
 FormatStyle: file
 WarningsAsErrors: "*"

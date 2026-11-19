@@ -6,4 +6,10 @@
  */
 
 #include "error.h"
-int main() { return errorReturnValue(); }
+#include "parser.h"
+
+int main() {
+    currentToken cur;
+    parseProg(&cur);
+    return errorReturnValue();
+}
