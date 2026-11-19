@@ -908,7 +908,7 @@ int getToken(Token *token) {
         }
         case STATE_STRING_SECOND_QUOTE: {
             if (znak == '"') {
-                // TODO: prejit na multiline
+                currState = STATE_MULTILINE_STRING;
                 break;
             }
             // nejde o uvozovku, takze mame prazdny jednoradkovy retezec
@@ -963,7 +963,79 @@ int getToken(Token *token) {
             currState = STATE_STRING;
             break;
         }
+        case STATE_MULTILINE_STRING: {
+            if (znak == EOF) { // neukonceny string
+                strFree(&dynStr);
+                return 1;
+            }
+            if (znak == '"') {
+                currState = STATE_MULTILINE_QUOTE1;
+                break;
+            }
+            if (znak == '\n') {
+                g_lexerState.currLine++;
+            }
+            if (strAddChar(&dynStr, (char)znak) != 0) {
+                strFree(&dynStr);
+                return 99;
+            }
+            break;
+        }
 
+        case STATE_MULTILINE_QUOTE1: {
+            if (znak == EOF) {
+                strFree(&dynStr);
+                return 1;
+            }
+            if (znak == '"') {
+                currState = STATE_MULTILINE_QUOTE2;
+                break;
+            }
+            if (znak == '\n') {
+                g_lexerState.currLine++;
+            }
+            if (strAddChar(&dynStr, '"') != 0 ||
+                strAddChar(&dynStr, (char)znak) != 0) { // pridame uvozovku z predchoziho nacteni
+                strFree(&dynStr);
+                return 99;
+            }
+            currState = STATE_MULTILINE_STRING;
+            break;
+        }
+        case STATE_MULTILINE_QUOTE2: {
+            if (znak == EOF) { // chyba
+                strFree(&dynStr);
+                return 1;
+            }
+            if (znak == '"') {
+                currState = STATE_MULTILINE_END; // tri uvozovky za sebou, jdeme do posledniho stavu
+                break;
+            }
+            if (znak == '\n') {
+                g_lexerState.currLine++;
+            }
+            if (strAddChar(&dynStr, '"') != 0 ||
+                strAddChar(&dynStr, '"') !=
+                    0 || // jiny znak, musime vratit predchozi nactene uvozovky a znak do stringu
+                strAddChar(&dynStr, (char)znak) != 0) {
+                strFree(&dynStr);
+                return 99;
+            }
+            currState = STATE_MULTILINE_STRING;
+            break;
+        }
+        case STATE_MULTILINE_END: {
+
+            if (znak == '"') {
+                if (strAddChar(&dynStr, '"') != 0) {
+                    strFree(&dynStr);
+                    return 99;
+                }
+                break;
+            }
+            (void)ungetc(znak, stdin);
+            return finishStringToken(token, &dynStr);
+        }
         default: {
             break;
         }
