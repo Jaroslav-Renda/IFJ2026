@@ -125,8 +125,8 @@ static char *createMangledFuncName(const char *funcName, bool isMain) {
  * @param isMutable   True if mutable (`var`), false if immutable (`val` or parameter).
  * @return OK on success, ERR_INTERNAL on allocation failure.
  */
-static uint8_t appendFuncVar(SemanticContext *ctx, const char *origName, char *mangledName,
-                             dataType type, bool isMutable) {
+static uint8_t appendFuncVar(
+    SemanticContext *ctx, const char *origName, char *mangledName, dataType type, bool isMutable) {
     if (ctx == NULL || ctx->currentFunc == NULL || ctx->currentFunc->data.func.node == NULL) {
         free(mangledName);
         return ERR_INTERNAL;
@@ -208,17 +208,12 @@ static uint8_t addSingleBuiltin(Symtable *table, const BuiltinDef *def) {
  * @return OK on success, ERR_INTERNAL on allocation error.
  */
 static uint8_t registerBuiltins(Symtable *table) {
-    static const BuiltinDef builtins[] = {
-        {"print", 1, TYPE_UNIT, {TYPE_ANY}},
-        {"readLine", 0, TYPE_STRING, {TYPE_UNKNOWN}},
-        {"readInt", 0, TYPE_INT, {TYPE_UNKNOWN}},
-        {"readDouble", 0, TYPE_DOUBLE, {TYPE_UNKNOWN}},
-        {"toStr", 1, TYPE_STRING, {TYPE_ANY}},
-        {"toInt", 1, TYPE_INT, {TYPE_DOUBLE}},
-        {"strLength", 1, TYPE_INT, {TYPE_STRING}},
+    static const BuiltinDef builtins[] = {{"print", 1, TYPE_UNIT, {TYPE_ANY}},
+        {"readLine", 0, TYPE_STRING, {TYPE_UNKNOWN}}, {"readInt", 0, TYPE_INT, {TYPE_UNKNOWN}},
+        {"readDouble", 0, TYPE_DOUBLE, {TYPE_UNKNOWN}}, {"toStr", 1, TYPE_STRING, {TYPE_ANY}},
+        {"toInt", 1, TYPE_INT, {TYPE_DOUBLE}}, {"strLength", 1, TYPE_INT, {TYPE_STRING}},
         {"substr", 3, TYPE_STRING, {TYPE_STRING, TYPE_INT, TYPE_INT}},
-        {"ord", 2, TYPE_INT, {TYPE_STRING, TYPE_INT}},
-        {"chr", 1, TYPE_STRING, {TYPE_INT}}};
+        {"ord", 2, TYPE_INT, {TYPE_STRING, TYPE_INT}}, {"chr", 1, TYPE_STRING, {TYPE_INT}}};
 
     size_t count = sizeof(builtins) / sizeof(builtins[0]);
     for (size_t i = 0; i < count; i++) {
@@ -422,8 +417,8 @@ static uint8_t collectAllFunc(SemanticContext *ctx, ASTNode *functions) {
     return OK;
 }
 
-static uint8_t evaluateExpresion(SemanticContext *ctx, ASTNode *expr, dataType *outType,
-                                 bool isCond);
+static uint8_t evaluateExpresion(
+    SemanticContext *ctx, ASTNode *expr, dataType *outType, bool isCond);
 
 /**
  * @brief Validates operand types for the binary '+' operator (numeric addition or string
@@ -436,8 +431,8 @@ static uint8_t evaluateExpresion(SemanticContext *ctx, ASTNode *expr, dataType *
  * @param lType Evaluated type of the left operand.
  * @return OK if valid, ERR_SEM_TYPE (6) on incompatible operand types.
  */
-static uint8_t evaluateAddOp(ASTNode *expr, ASTNode *right, ASTNode *left, dataType rType,
-                             dataType lType) {
+static uint8_t evaluateAddOp(
+    ASTNode *expr, ASTNode *right, ASTNode *left, dataType rType, dataType lType) {
     if (lType == TYPE_STRING && rType == TYPE_STRING) {
         expr->semanticType = TYPE_STRING;
     } else if (lType == TYPE_INT && rType == TYPE_INT) {
@@ -466,8 +461,8 @@ static uint8_t evaluateAddOp(ASTNode *expr, ASTNode *right, ASTNode *left, dataT
  * @param lType Evaluated type of the left operand.
  * @return OK if valid, ERR_SEM_TYPE (6) on non-numeric operand types.
  */
-static uint8_t evaluateSubOp(ASTNode *expr, ASTNode *right, ASTNode *left, dataType rType,
-                             dataType lType) {
+static uint8_t evaluateSubOp(
+    ASTNode *expr, ASTNode *right, ASTNode *left, dataType rType, dataType lType) {
     if (lType == TYPE_INT && rType == TYPE_INT) {
         expr->semanticType = TYPE_INT;
     } else if (lType == TYPE_DOUBLE && rType == TYPE_DOUBLE) {
@@ -495,8 +490,8 @@ static uint8_t evaluateSubOp(ASTNode *expr, ASTNode *right, ASTNode *left, dataT
  * @param isCond True if the expression is the root of an `if` or `while` condition.
  * @return OK if valid, ERR_SEM_TYPE (6) otherwise.
  */
-static uint8_t evaluateNonEqRelOp(ASTNode *expr, ASTNode *right, ASTNode *left, dataType rType,
-                                  dataType lType, bool isCond) {
+static uint8_t evaluateNonEqRelOp(
+    ASTNode *expr, ASTNode *right, ASTNode *left, dataType rType, dataType lType, bool isCond) {
     /// Relational operators are only permitted inside conditions without BOOLTHEN
     if (!isCond) {
         return ERR_SEM_TYPE;
@@ -528,8 +523,8 @@ static uint8_t evaluateNonEqRelOp(ASTNode *expr, ASTNode *right, ASTNode *left, 
  * @param isCond True if the expression is the root of an `if` or `while` condition.
  * @return OK if valid, ERR_SEM_TYPE (6) otherwise.
  */
-static uint8_t evaluateEq(ASTNode *expr, ASTNode *right, ASTNode *left, dataType rType,
-                          dataType lType, bool isCond) {
+static uint8_t evaluateEq(
+    ASTNode *expr, ASTNode *right, ASTNode *left, dataType rType, dataType lType, bool isCond) {
     if (!isCond) {
         return ERR_SEM_TYPE;
     }
@@ -738,8 +733,8 @@ static uint8_t evaluateUnOp(SemanticContext *ctx, ASTNode *expr, dataType *outTy
  * @param isCond  True if the expression is the top-level condition of an `if` or `while`.
  * @return OK on success, or the corresponding semantic error code.
  */
-static uint8_t evaluateExpresion(SemanticContext *ctx, ASTNode *expr, dataType *outType,
-                                 bool isCond) {
+static uint8_t evaluateExpresion(
+    SemanticContext *ctx, ASTNode *expr, dataType *outType, bool isCond) {
     if (expr == NULL) {
         return ERR_INTERNAL;
     }
@@ -829,8 +824,8 @@ static uint8_t checkVarDecl(SemanticContext *ctx, ASTNode *decl) {
         return ERR_INTERNAL;
     }
 
-    uint8_t listErr = appendFuncVar(ctx, decl->data.varDecl.name, mangled, finalType,
-                                    decl->data.varDecl.isMutable);
+    uint8_t listErr = appendFuncVar(
+        ctx, decl->data.varDecl.name, mangled, finalType, decl->data.varDecl.isMutable);
     if (listErr != OK) {
         return listErr;
     }
@@ -947,6 +942,7 @@ static uint8_t checkIfStmt(SemanticContext *ctx, ASTNode *stmt) {
         return ERR_SEM_TYPE; /// Error 6: Condition is not a relational expression
     }
 
+    stmt->data.ifStmt.idx = ctx->nextIfLabelId++;
     err = checkBlock(ctx, stmt->data.ifStmt.thenBlock);
     if (err != OK) {
         return err;
@@ -957,7 +953,6 @@ static uint8_t checkIfStmt(SemanticContext *ctx, ASTNode *stmt) {
         return err;
     }
 
-    stmt->data.ifStmt.idx = ctx->nextIfLabelId++;
     stmt->semanticType = TYPE_UNIT;
     return OK;
 }
@@ -976,6 +971,7 @@ static uint8_t checkWhileStmt(SemanticContext *ctx, ASTNode *stmt) {
         return err;
     }
 
+    stmt->data.whileStmt.idx = ctx->nextwhileLabelId++;
     if (condType != TYPE_BOOL) {
         return ERR_SEM_TYPE; /// Error 6: Condition is not a relational expression
     }
@@ -985,7 +981,6 @@ static uint8_t checkWhileStmt(SemanticContext *ctx, ASTNode *stmt) {
         return err;
     }
 
-    stmt->data.whileStmt.idx = ctx->nextwhileLabelId++;
     stmt->semanticType = TYPE_UNIT;
     return OK;
 }
@@ -1077,7 +1072,7 @@ static uint8_t checkBlock(SemanticContext *ctx, ASTNode *block) {
  * @return OK on success, or ERR_SEM_TYPE (6) if an `if-else` tail violates Rule 3.
  */
 static uint8_t checkFunctionTail(ASTNode *body, symtableItem *func, bool *outAllreturn,
-                                 dataType *outType, ASTNode **outLastExpr) {
+    dataType *outType, ASTNode **outLastExpr) {
     *outLastExpr = NULL;
     ASTNode *curr = unwrapBlock(body);
 
@@ -1282,7 +1277,7 @@ static uint8_t checkFunction(symtableItem *func, SemanticContext *ctx) {
         paramVar->mangledName = paramMangled;
 
         err = appendFuncVar(ctx, func->data.func.params[i].name, paramMangled,
-                            func->data.func.params[i].type, false);
+            func->data.func.params[i].type, false);
         if (err != OK) {
             break;
         }

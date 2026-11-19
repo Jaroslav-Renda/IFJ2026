@@ -7,6 +7,7 @@
 #ifndef PRECSTACK_H
 #define PRECSTACK_H
 
+#include "ast.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -35,6 +36,7 @@ typedef enum : uint8_t {
 typedef struct PrecStackElemT {
     PrecStackType type;
     bool isFooCall;
+    ASTNode *node; /**< AST subtree attached to this stack element (or NULL). */
     struct PrecStackElemT *next;
 } PrecStackElem;
 

@@ -32,6 +32,7 @@ Symtable *symtableInit(size_t n) {
     for (size_t i = 0; i < n; i++) {
         tab->items[i].state = SLOT_EMPTY;
         tab->items[i].key = NULL;
+        tab->items[i].mangledName = NULL;
     }
     tab->size = 0;
     tab->usedSlots = 0;
@@ -46,6 +47,9 @@ void symtableFree(Symtable *table) {
     for (size_t i = 0; i < table->capacity; i++) {
         if (table->items[i].key != NULL && table->items[i].kind == SYM_FUNC) {
             free(table->items[i].data.func.params);
+            if (table->items[i].mangledName != NULL) {
+                free(table->items[i].mangledName);
+            }
         }
         free(table->items[i].key);
     }
@@ -125,6 +129,7 @@ static symtableItem *itemInit(Symtable *symtable, size_t idx, const char *key) {
     }
     size_t len = strlen(key) + 1;
     symtable->items[idx].key = malloc(len);
+    symtable->items[idx].mangledName = NULL;
     if (symtable->items[idx].key == NULL) {
         return NULL;
     }
