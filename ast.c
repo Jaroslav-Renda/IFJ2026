@@ -97,6 +97,9 @@ void deleteNode(ASTNode *node) {
             if (node->data.param.name != NULL) {
                 free(node->data.param.name);
             }
+            if (node->data.param.mangledName != NULL) {
+                free(node->data.param.mangledName);
+            }
             break;
 
         case NODE_VAR_DECL:

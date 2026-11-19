@@ -119,6 +119,7 @@ struct ASTNode {
          */
         struct {
             char *name;
+            char *mangledName;
             dataType type;
         } param;
 
