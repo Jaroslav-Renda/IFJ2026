@@ -12,6 +12,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h> // size_t
+
+typedef struct ASTNode ASTNode;
 typedef const char *symtableKeyT;
 
 typedef enum : uint8_t {
@@ -21,6 +23,7 @@ typedef enum : uint8_t {
     TYPE_STRING,
     TYPE_UNIT,
     TYPE_ANY,
+    TYPE_BOOL, // internal type for conditions
 } dataType;
 
 typedef enum : uint8_t {
@@ -50,8 +53,11 @@ typedef struct {
 
 typedef struct {
     dataType returnType;
+    ASTNode *node;
     bool hasExplicitReturnType; // was the return type explicitly stated
     bool hasReturnStmt;         // does the body contain return type?
+    bool beingEvaluated;
+    bool isEvaluated;
     bool isMain;
     bool isBuiltin;
     size_t paramCount;
@@ -59,7 +65,8 @@ typedef struct {
 } symFuncData;
 
 typedef struct {
-    char *key; // identificator name
+    char *key;         // identificator name
+    char *mangledName; /// mangled name code for code generator
     slotState state;
     symKind kind; // SYM_VAR or SYM_FUNC
     union {
@@ -76,27 +83,11 @@ typedef struct SymtableT {
 } Symtable;
 
 /**
- * @brief Symtable hash func implemeted as sdbm
- * @param key key to be hashed
- * @return index on which our item is located in our array
- */
-size_t symtableHashFunction(symtableKeyT key);
-
-/**
  * @brief Initilizes Symtable with n items
  * @param n number of
  * @return Pointer to the new initalized Symtable
  */
 Symtable *symtableInit(size_t n);
-
-/**
- * @brief Initilizes SymtableItem at idx with given key
- * @param symtable target symtable
- * @param idx index where you want to place your item
- * @param key string which you want to add as a key
- * @return Pointer to the new initalized item or NULL in case of error of malloc
- */
-static symtableItem *itemInit(Symtable *symtable, size_t idx, const char *key);
 
 /**
  * @brief Finds item in symtable
@@ -120,22 +111,8 @@ symtableItem *symtableLookupAdd(Symtable *table, symtableKeyT key);
  * @brief Frees symtable with n items
  * @param table pointer to the to be deleted table
  */
-
 void symtableFree(Symtable *table);
 
-/**
- * @brief Checks if used slots take more than 60% of space
- * @param table
- * @return True if we need to rehash false otherwise
- */
-static bool checkForRehash(Symtable const *table);
-
-/**
- * @brief Funciton for rehasimg the item array with double capacity
- * @param table
- * @return True if succes
- */
-static bool rehash(Symtable *table);
 /**
  * @brief Debugging function for printing all keys stored in array
  * @param table

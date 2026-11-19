@@ -14,6 +14,7 @@
  * @brief Error return numbers of the compiler.
  */
 typedef enum : uint8_t {
+    OK = 0,                   // No errors
     ERR_LEXER = 1,            // Error in lexical analysis.
     ERR_PARSER = 2,           // Error in syntactic analysis.
     ERR_SEM_UNDEFINED = 3,    // Use of undefined function, variable or type, missing @main.
