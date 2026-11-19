@@ -211,6 +211,13 @@ int getToken(Token *token) {
                 currState = STATE_EXCLAMATION_MARK;
                 break;
             }
+            if (znak == '@') {
+                if (strInit(&dynStr) != 0) {
+                    return 99;
+                }
+                currState = STATE_AT_SIGN;
+                break;
+            }
             if (isalpha(znak) || znak == '_') {
                 if (strInit(&dynStr) != 0) {
                     return 99;
@@ -838,6 +845,25 @@ int getToken(Token *token) {
                 break;
             }
             // jiny nez povoleny token, error
+            return 1;
+        }
+        case STATE_AT_SIGN: {
+            if (isalnum(znak) || znak == '_') {
+                if (strAddChar(&dynStr, (char)znak) != 0) {
+                    strFree(&dynStr);
+                    return 99;
+                }
+                break;
+            }
+            (void)ungetc(znak, stdin);
+            if (strCompare(&dynStr, "main") == 0) {
+                strFree(&dynStr);
+                token->type = TOKEN_MAIN;
+                token->line = g_lexerState.currLine;
+                g_lexerState.lineHasCode = true;
+                return 0;
+            }
+            strFree(&dynStr);
             return 1;
         }
 

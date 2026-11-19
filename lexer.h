@@ -44,6 +44,7 @@ enum automatState {
 
     STATE_PROCESS_INDENT,
     STATE_AFTER_MULTILINE_BLOCK_COMMENT,
+    STATE_AT_SIGN,
 
 };
 
