@@ -2,7 +2,7 @@
  * @file    lexer.h
  * @author  Jakub Zenata (xzenatj00)
  * @brief   header file of lexer
- * @date    2026-10-06
+ * @date    2026-11-19
  * @details project_IFJ2026
  */
 
@@ -34,6 +34,16 @@ enum automatState {
     STATE_ANGLE_BRACKET_BIGGER,
     STATE_EQUAL,
     STATE_EXCLAMATION_MARK,
+    STATE_LINE_BEG,
+    STATE_LINE_BEG_WITH_SLASH, // moznost vyskytu radkoveho komentare.pokud ano, -> prazdny radek
+
+    STATE_LINE_BEG_AFTER_BLOCK_COMMENT, // jsme na zacatku radku a mame detekovany blokovy komentar
+    STATE_BLOCK_COMMENT,                // uvnitr /*
+    STATE_BLOCK_COMMENT_SLASH,          // uvnitr /*   , dostanem /
+    STATE_BLOCK_COMMENT_STAR,           // uvnitr /*   , dostanem *
+
+    STATE_PROCESS_INDENT,
+    STATE_AFTER_MULTILINE_BLOCK_COMMENT,
 
 };
 
