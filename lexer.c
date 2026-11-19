@@ -69,6 +69,19 @@ static bool checkForKeyword(DynamicString *str1, keyword *detectedKeyword) {
     return false;
 }
 
+static int finishStringToken(Token *token, DynamicString *dynStr) {
+    token->type = TOKEN_STRING;
+    token->line = g_lexerState.currLine;
+    token->data.stringVal = malloc(strlen(dynStr->str) + 1);
+    if (token->data.stringVal == NULL) {
+        strFree(dynStr);
+        return 99;
+    }
+    strcpy(token->data.stringVal, dynStr->str);
+    strFree(dynStr);
+    g_lexerState.lineHasCode = true;
+    return 0;
+}
 int getToken(Token *token) {
     if (!g_lexerStateInitialized) {
         return 99;
@@ -216,6 +229,13 @@ int getToken(Token *token) {
                     return 99;
                 }
                 currState = STATE_AT_SIGN;
+                break;
+            }
+            if (znak == '"') {
+                if (strInit(&dynStr) != 0) {
+                    return 99;
+                }
+                currState = STATE_STRING_START;
                 break;
             }
             if (isalpha(znak) || znak == '_') {
@@ -865,6 +885,83 @@ int getToken(Token *token) {
             }
             strFree(&dynStr);
             return 1;
+        }
+        case STATE_STRING_START: {
+            if (znak == '"') {
+                currState = STATE_STRING_SECOND_QUOTE;
+                break;
+            }
+            if (znak == '\\') {
+                currState = STATE_STRING_ESCAPE_SEQUENCE;
+                break;
+            }
+            if (znak == '\n' || znak == '\r' || znak == EOF) {
+                strFree(&dynStr);
+                return 1;
+            }
+            if (strAddChar(&dynStr, (char)znak) != 0) {
+                strFree(&dynStr);
+                return 99;
+            }
+            currState = STATE_STRING;
+            break;
+        }
+        case STATE_STRING_SECOND_QUOTE: {
+            if (znak == '"') {
+                // TODO: prejit na multiline
+                break;
+            }
+            // nejde o uvozovku, takze mame prazdny jednoradkovy retezec
+            (void)ungetc(znak, stdin);
+            return finishStringToken(token, &dynStr);
+        }
+        case STATE_STRING: {
+            if (znak == '"') { // konec stringu
+                return finishStringToken(token, &dynStr);
+            }
+            if (znak == '\\') {
+                currState = STATE_STRING_ESCAPE_SEQUENCE;
+                break;
+            }
+            if (znak == '\n' || znak == '\r' ||
+                znak == EOF) { // neni povoleno v ramci jednoradkoveho komentare
+                strFree(&dynStr);
+                return 1;
+            }
+            if (strAddChar(&dynStr, (char)znak) != 0) {
+                strFree(&dynStr);
+                return 99;
+            }
+            break;
+        }
+        case STATE_STRING_ESCAPE_SEQUENCE: { // escape sekvence
+            char escapedChar;
+            switch (znak) { // podporovány jsou escape sekvence \\, \", \n, \r a \t.
+            case '\\':
+                escapedChar = '\\';
+                break;
+            case '"':
+                escapedChar = '"';
+                break;
+            case 'n':
+                escapedChar = '\n';
+                break;
+            case 'r':
+                escapedChar = '\r';
+                break;
+            case 't':
+                escapedChar = '\t';
+                break;
+            default: // nepodporovany znak
+                strFree(&dynStr);
+                return 1;
+            }
+            if (strAddChar(&dynStr, escapedChar) != 0) {
+                strFree(&dynStr);
+                return 99;
+            }
+            currState = STATE_STRING;
+            break;
         }
 
         default: {
