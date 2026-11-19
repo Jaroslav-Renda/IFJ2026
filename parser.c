@@ -473,7 +473,7 @@ bool parseParams(currentToken *cur) {
 
     // no more parameters
     if (cur->token.type == TOKEN_RIGHT_BRACKET) {
-        return nextToken(cur);
+        return true;
     }
 
     errorParser(cur->token.line, "Syntax error: expected parameter name or ')'");
