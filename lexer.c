@@ -7,6 +7,8 @@
  */
 
 #include "lexer.h"
+#include "error.h"
+
 #include "dynamicString.h"
 #include <ctype.h>
 #include <stdbool.h>
@@ -39,6 +41,24 @@ static lexerState g_lexerState; // private lexer state,
 // used primarelly for parsing indent/dedent blocks
 static bool g_lexerStateInitialized;
 
+static int lexicalError(const char *msg) {
+    errorLexer(g_lexerState.currLine, msg);
+    return ERR_LEXER;
+}
+static int lexicalErrorFree(DynamicString *dynStr, const char *msg) {
+    strFree(dynStr);
+    errorLexer(g_lexerState.currLine, msg);
+    return ERR_LEXER;
+}
+static int internalError(const char *msg) {
+    errorInternal(g_lexerState.currLine, msg);
+    return ERR_INTERNAL;
+}
+static int internalErrorFree(DynamicString *dynStr, const char *msg) {
+    strFree(dynStr);
+    errorInternal(g_lexerState.currLine, msg);
+    return ERR_INTERNAL;
+}
 void lexerStateInit() {
     g_lexerStateInitialized = true;
     g_lexerState.currLine = 1;
@@ -74,8 +94,7 @@ static int finishStringToken(Token *token, DynamicString *dynStr) {
     token->line = g_lexerState.currLine;
     token->data.stringVal = malloc(strlen(dynStr->str) + 1);
     if (token->data.stringVal == NULL) {
-        strFree(dynStr);
-        return 99;
+        return internalErrorFree(dynStr, "memory allocation failed for string literal");
     }
     strcpy(token->data.stringVal, dynStr->str);
     strFree(dynStr);
@@ -84,7 +103,11 @@ static int finishStringToken(Token *token, DynamicString *dynStr) {
 }
 int getToken(Token *token) {
     if (!g_lexerStateInitialized) {
-        return 99;
+        errorInternal(
+            0, "lexerStateInit was not called before getToken"); // nemuzu volat internalError()
+                                                                 // protoze accesuje
+                                                                 // neinicializovany lexerstate
+        return ERR_INTERNAL;
     }
     int currState = STATE_START;
     DynamicString dynStr;
@@ -226,55 +249,55 @@ int getToken(Token *token) {
             }
             if (znak == '@') {
                 if (strInit(&dynStr) != 0) {
-                    return 99;
+                    return internalError("memory allocation failed");
                 }
                 currState = STATE_AT_SIGN;
                 break;
             }
             if (znak == '"') {
                 if (strInit(&dynStr) != 0) {
-                    return 99;
+                    return internalError("memory allocation failed");
                 }
                 currState = STATE_STRING_START;
                 break;
             }
             if (isalpha(znak) || znak == '_') {
                 if (strInit(&dynStr) != 0) {
-                    return 99;
+                    return internalError("memory allocation failed");
                 }
                 if (strAddChar(&dynStr, (char)znak) != 0) {
-                    return 99;
+                    return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 currState = STATE_IDENTIFIER; // identifikator
                 break;
             }
             if (znak == '0') {
                 if (strInit(&dynStr) != 0) {
-                    return 99;
+                    return internalError("memory allocation failed");
                 }
                 if (strAddChar(&dynStr, (char)znak) != 0) {
-                    return 99;
+                    return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 currState = STATE_ZERO_NUMBER;
                 break;
             }
             if (znak > '0' && znak <= '9') {
                 if (strInit(&dynStr) != 0) {
-                    return 99;
+                    return internalError("memory allocation failed");
                 }
                 if (strAddChar(&dynStr, (char)znak) != 0) {
-                    return 99;
+                    return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 currState = STATE_FULL_NUMBER; // cislo
                 break;
             }
-            return 1; // nezname znaky
+            return lexicalError("unexpected character"); // nezname znaky
         }
         case STATE_IDENTIFIER: // identifikator
         {
             if (isalnum(znak) || znak == '_') {
                 if (strAddChar(&dynStr, (char)znak) != 0) {
-                    return 99;
+                    return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 break;
             }
@@ -290,8 +313,7 @@ int getToken(Token *token) {
                 g_lexerState.lineHasCode = true;
                 token->data.identifier = malloc(strlen(dynStr.str) + 1);
                 if (token->data.identifier == NULL) {
-                    strFree(&dynStr);
-                    return 99;
+                    return internalErrorFree(&dynStr, "memory allocation failed for identifier");
                 }
                 strcpy(token->data.identifier, dynStr.str);
                 strFree(&dynStr);
@@ -302,19 +324,18 @@ int getToken(Token *token) {
         case STATE_ZERO_NUMBER: {
             if (znak == '.') {
                 if (strAddChar(&dynStr, (char)znak) != 0) {
-                    return 99;
+                    return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 currState = STATE_DECIMAL_POINT;
             } else if (znak == 'e' || znak == 'E') {
                 if (strAddChar(&dynStr, (char)znak) != 0) {
-                    return 99;
+                    return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 currState = STATE_EXPONENT_E;
             } else if (znak == 'd' || znak == 'D') {
                 currState = STATE_DOUBLE_SUFFIX;
             } else if (isdigit(znak)) { // lex chyba, cele cislo nesmi zacinat nulou
-                strFree(&dynStr);
-                return 1;
+                return lexicalErrorFree(&dynStr, "integer literal cannot start with leading zero");
             } else {
                 (void)ungetc(znak, stdin);
                 token->type = TOKEN_INT;
@@ -334,13 +355,13 @@ int getToken(Token *token) {
 
             } else if (znak >= '0' && znak <= '9') {
                 if (strAddChar(&dynStr, (char)znak) != 0) {
-                    return 99;
+                    return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 currState = STATE_FULL_NUMBER; // zustavame ve stejnem stavu
 
             } else if (znak == 'e' || znak == 'E') {
                 if (strAddChar(&dynStr, (char)znak) != 0) {
-                    return 99;
+                    return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 currState = STATE_EXPONENT_E;
 
@@ -349,7 +370,7 @@ int getToken(Token *token) {
 
             } else if (znak == '.') {
                 if (strAddChar(&dynStr, (char)znak) != 0) {
-                    return 99;
+                    return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 currState = STATE_DECIMAL_POINT;
 
@@ -371,12 +392,12 @@ int getToken(Token *token) {
                 currState = STATE_FULL_NUMBER_UNDERSCORE;
             } else if (znak >= '0' && znak <= '9') {
                 if (strAddChar(&dynStr, (char)znak) != 0) {
-                    return 99;
+                    return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 currState = STATE_FULL_NUMBER;
             } else {
-                strFree(&dynStr);
-                return 1;
+                return lexicalErrorFree(&dynStr,
+                                        "expected digit after underscore in number literal");
             }
             break;
         }
@@ -385,13 +406,12 @@ int getToken(Token *token) {
         {
             if (znak >= '0' && znak <= '9') {
                 if (strAddChar(&dynStr, (char)znak) != 0) {
-                    return 99;
+                    return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 currState = STATE_DECIMAL_NUMBER;
 
             } else {
-                strFree(&dynStr);
-                return 1;
+                return lexicalErrorFree(&dynStr, "expected digit after decimal point");
             }
             break;
         }
@@ -400,12 +420,12 @@ int getToken(Token *token) {
                 currState = STATE_DECIMAL_NUMBER_UNDERSCORE;
             } else if (znak >= '0' && znak <= '9') {
                 if (strAddChar(&dynStr, (char)znak) != 0) {
-                    return 99;
+                    return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 currState = STATE_DECIMAL_NUMBER;
             } else if (znak == 'e' || znak == 'E') {
                 if (strAddChar(&dynStr, (char)znak) != 0) {
-                    return 99;
+                    return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 currState = STATE_EXPONENT_E;
 
@@ -430,42 +450,40 @@ int getToken(Token *token) {
 
             } else if (znak >= '0' && znak <= '9') {
                 if (strAddChar(&dynStr, (char)znak) != 0) {
-                    return 99;
+                    return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 currState = STATE_DECIMAL_NUMBER;
             } else {
-                strFree(&dynStr);
-                return 1;
+                return lexicalErrorFree(&dynStr,
+                                        "expected digit after underscore in decimal literal");
             }
             break;
         }
         case STATE_EXPONENT_E: {
-            if (znak == '-') {
+            if (znak == '-' || znak == '+') {
                 if (strAddChar(&dynStr, (char)znak) != 0) {
-                    return 99;
+                    return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 currState = STATE_EXPONENT_SIGN;
 
             } else if (znak >= '0' && znak <= '9') {
                 if (strAddChar(&dynStr, (char)znak) != 0) {
-                    return 99;
+                    return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 currState = STATE_EXPONENT_NUMBER;
             } else {
-                strFree(&dynStr);
-                return 1;
+                return lexicalErrorFree(&dynStr, "expected sign or digit in exponent");
             }
             break;
         }
         case STATE_EXPONENT_SIGN: {
             if (znak >= '0' && znak <= '9') {
                 if (strAddChar(&dynStr, (char)znak) != 0) {
-                    return 99;
+                    return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 currState = STATE_EXPONENT_NUMBER;
             } else {
-                strFree(&dynStr);
-                return 1; // error
+                return lexicalErrorFree(&dynStr, "expected digit after exponent sign");
             }
             break;
         }
@@ -474,7 +492,7 @@ int getToken(Token *token) {
                 currState = STATE_EXPONENT_NUMBER_UNDERSCORE;
             } else if (znak >= '0' && znak <= '9') {
                 if (strAddChar(&dynStr, (char)znak) != 0) {
-                    return 99;
+                    return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 currState = STATE_EXPONENT_NUMBER;
             } else if (znak == 'd' || znak == 'D') {
@@ -498,12 +516,11 @@ int getToken(Token *token) {
 
             } else if (znak >= '0' && znak <= '9') {
                 if (strAddChar(&dynStr, (char)znak) != 0) {
-                    return 99;
+                    return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 currState = STATE_EXPONENT_NUMBER;
             } else {
-                strFree(&dynStr);
-                return 1;
+                return lexicalErrorFree(&dynStr, "expected digit after underscore in exponent");
             }
             break;
         }
@@ -622,7 +639,7 @@ int getToken(Token *token) {
             }
             (void)ungetc(znak, stdin); // pretypovano na void kvuli clang tidy
 
-            return 1; // error TODO dodelat errory
+            return lexicalError("unexpected '!', expected '!='");
         }
         case STATE_LINE_BEG: {
             if (znak == ' ') {
@@ -631,8 +648,7 @@ int getToken(Token *token) {
             }
             if (znak == '\t') // jedna se o prazdny radek
             {
-                // lexikalni chyba
-                return 1;
+                return lexicalError("tab character is not allowed for indentation");
             }
             if (znak == '\n') // jedna se o prazdny radek
             {
@@ -691,7 +707,7 @@ int getToken(Token *token) {
             }
             if (znak == EOF) // ERROR
             {
-                return 1;
+                return lexicalError("unterminated block comment");
             }
             break; // jiny znak, pokracujeme v ignorovani
         }
@@ -709,7 +725,7 @@ int getToken(Token *token) {
             }
             if (znak == EOF) // ERROR
             {
-                return 1;
+                return lexicalError("unterminated block comment");
             }
             if (znak == '/') {
                 currState = STATE_BLOCK_COMMENT_SLASH;
@@ -740,7 +756,7 @@ int getToken(Token *token) {
             }
             if (znak == EOF) // ERROR
             {
-                return 1;
+                return lexicalError("unterminated block comment");
             }
             if (znak == '\n') {
                 commentHasNewline = true;
@@ -791,7 +807,7 @@ int getToken(Token *token) {
             }
             if (spaceCount > topIndent) {
                 if (g_lexerState.stackCount >= MAX_INDENT_SIZE) {
-                    return 99;
+                    return internalError("maximum indentation nesting depth exceeded");
                 }
                 g_lexerState.indentStack[g_lexerState.stackCount] = spaceCount;
                 g_lexerState.stackCount++;
@@ -808,7 +824,7 @@ int getToken(Token *token) {
                     dedentsToEmit++;
                 }
                 if (g_lexerState.indentStack[g_lexerState.stackCount - 1] != spaceCount) {
-                    return 1;
+                    return lexicalError("inconsistent dedentation level");
                 }
                 g_lexerState.pendingDedents = dedentsToEmit - 1;
                 if (znak != EOF) {
@@ -865,13 +881,12 @@ int getToken(Token *token) {
                 break;
             }
             // jiny nez povoleny token, error
-            return 1;
+            return lexicalError("unexpected token after multiline block comment");
         }
         case STATE_AT_SIGN: {
             if (isalnum(znak) || znak == '_') {
                 if (strAddChar(&dynStr, (char)znak) != 0) {
-                    strFree(&dynStr);
-                    return 99;
+                    return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 break;
             }
@@ -883,8 +898,7 @@ int getToken(Token *token) {
                 g_lexerState.lineHasCode = true;
                 return 0;
             }
-            strFree(&dynStr);
-            return 1;
+            return lexicalErrorFree(&dynStr, "invalid annotation, only '@main' is allowed");
         }
         case STATE_STRING_START: {
             if (znak == '"') {
@@ -896,12 +910,10 @@ int getToken(Token *token) {
                 break;
             }
             if (znak == '\n' || znak == '\r' || znak == EOF) {
-                strFree(&dynStr);
-                return 1;
+                return lexicalErrorFree(&dynStr, "unterminated string literal");
             }
             if (strAddChar(&dynStr, (char)znak) != 0) {
-                strFree(&dynStr);
-                return 99;
+                return internalErrorFree(&dynStr, "memory allocation failed");
             }
             currState = STATE_STRING;
             break;
@@ -925,12 +937,10 @@ int getToken(Token *token) {
             }
             if (znak == '\n' || znak == '\r' ||
                 znak == EOF) { // neni povoleno v ramci jednoradkoveho komentare
-                strFree(&dynStr);
-                return 1;
+                return lexicalErrorFree(&dynStr, "unterminated string literal");
             }
             if (strAddChar(&dynStr, (char)znak) != 0) {
-                strFree(&dynStr);
-                return 99;
+                return internalErrorFree(&dynStr, "memory allocation failed");
             }
             break;
         }
@@ -953,20 +963,17 @@ int getToken(Token *token) {
                 escapedChar = '\t';
                 break;
             default: // nepodporovany znak
-                strFree(&dynStr);
-                return 1;
+                return lexicalErrorFree(&dynStr, "invalid escape sequence in string literal");
             }
             if (strAddChar(&dynStr, escapedChar) != 0) {
-                strFree(&dynStr);
-                return 99;
+                return internalErrorFree(&dynStr, "memory allocation failed");
             }
             currState = STATE_STRING;
             break;
         }
         case STATE_MULTILINE_STRING: {
             if (znak == EOF) { // neukonceny string
-                strFree(&dynStr);
-                return 1;
+                return lexicalErrorFree(&dynStr, "unterminated multiline string literal");
             }
             if (znak == '"') {
                 currState = STATE_MULTILINE_QUOTE1;
@@ -976,16 +983,14 @@ int getToken(Token *token) {
                 g_lexerState.currLine++;
             }
             if (strAddChar(&dynStr, (char)znak) != 0) {
-                strFree(&dynStr);
-                return 99;
+                return internalErrorFree(&dynStr, "memory allocation failed");
             }
             break;
         }
 
         case STATE_MULTILINE_QUOTE1: {
             if (znak == EOF) {
-                strFree(&dynStr);
-                return 1;
+                return lexicalErrorFree(&dynStr, "unterminated multiline string literal");
             }
             if (znak == '"') {
                 currState = STATE_MULTILINE_QUOTE2;
@@ -996,16 +1001,14 @@ int getToken(Token *token) {
             }
             if (strAddChar(&dynStr, '"') != 0 ||
                 strAddChar(&dynStr, (char)znak) != 0) { // pridame uvozovku z predchoziho nacteni
-                strFree(&dynStr);
-                return 99;
+                return internalErrorFree(&dynStr, "memory allocation failed");
             }
             currState = STATE_MULTILINE_STRING;
             break;
         }
         case STATE_MULTILINE_QUOTE2: {
             if (znak == EOF) { // chyba
-                strFree(&dynStr);
-                return 1;
+                return lexicalErrorFree(&dynStr, "unterminated multiline string literal");
             }
             if (znak == '"') {
                 currState = STATE_MULTILINE_END; // tri uvozovky za sebou, jdeme do posledniho stavu
@@ -1018,8 +1021,7 @@ int getToken(Token *token) {
                 strAddChar(&dynStr, '"') !=
                     0 || // jiny znak, musime vratit predchozi nactene uvozovky a znak do stringu
                 strAddChar(&dynStr, (char)znak) != 0) {
-                strFree(&dynStr);
-                return 99;
+                return internalErrorFree(&dynStr, "memory allocation failed");
             }
             currState = STATE_MULTILINE_STRING;
             break;
@@ -1028,8 +1030,7 @@ int getToken(Token *token) {
 
             if (znak == '"') {
                 if (strAddChar(&dynStr, '"') != 0) {
-                    strFree(&dynStr);
-                    return 99;
+                    return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 break;
             }
