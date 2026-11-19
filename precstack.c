@@ -6,66 +6,78 @@
  */
 
 #include "precstack.h"
+#include "error.h"
 #include <stdlib.h>
 
-void initStack(PrecStack *stack) {
+bool precInitStack(PrecStack *stack) {
     if (stack == NULL) {
-        return;
+        errorInternal(0, "stack pointer is NULL");
+        return false;
     }
 
     stack->top = NULL;
+    return true;
 }
 
-void push(PrecStack *stack, PrecStackType type) {
+bool precPush(PrecStack *stack, PrecStackType type) {
     if (stack == NULL) {
-        return;
+        errorInternal(0, "stack pointer is NULL");
+        return false;
     }
 
     PrecStackElem *newEl = (PrecStackElem *)malloc(sizeof(PrecStackElem));
     if (newEl == NULL) {
-        return;
+        errorInternal(0, "memory allocation failed");
+        return false;
     }
 
     newEl->type = type;
     newEl->isFooCall = false;
     newEl->next = stack->top;
     stack->top = newEl;
+    return true;
 }
 
-void pushAfterTerminal(PrecStack *stack, PrecStackType type) {
+bool precPushAfterTerminal(PrecStack *stack, PrecStackType type) {
     if (stack == NULL) {
-        return;
+        errorInternal(0, "stack pointer is NULL");
+        return false;
     }
 
     PrecStackElem **cur = &stack->top;
 
-    while (*cur != NULL && ((*cur)->type == P_EXP)) {
+    while (*cur != NULL && ((*cur)->type == P_STACK_EXP)) {
         cur = &(*cur)->next;
     }
 
     PrecStackElem *newEl = (PrecStackElem *)malloc(sizeof(PrecStackElem));
     if (newEl == NULL) {
-        return;
+        errorInternal(0, "memory allocation failed");
+        return false;
     }
 
     newEl->type = type;
     newEl->isFooCall = false;
     newEl->next = *cur;
     *cur = newEl;
+    return true;
 }
 
-void pop(PrecStack *stack) {
+bool precPop(PrecStack *stack) {
     if (stack == NULL) {
-        return;
+        errorInternal(0, "stack pointer is NULL");
+        return false;
     }
 
     if (stack->top == NULL) {
-        return;
+        errorInternal(0, "cannot precPop from an empty stack");
+        return false;
     }
 
     PrecStackElem *tmp = stack->top;
     stack->top = stack->top->next;
     free(tmp);
+    return true;
 }
 
 PrecStackElem *topTerminal(PrecStack *stack) {
@@ -77,18 +89,20 @@ PrecStackElem *topTerminal(PrecStack *stack) {
         return NULL;
     }
     PrecStackElem *cur = stack->top;
-    while (cur != NULL && (cur->type == P_EXP)) {
+    while (cur != NULL && (cur->type == P_STACK_EXP)) {
         cur = cur->next;
     }
     return cur;
 }
 
-void deleteStack(PrecStack *stack) {
+bool precDeleteStack(PrecStack *stack) {
     if (stack == NULL) {
-        return;
+        errorInternal(0, "stack pointer is NULL");
+        return false;
     }
 
     while (stack->top != NULL) {
-        pop(stack);
+        precPop(stack);
     }
+    return true;
 }

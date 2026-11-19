@@ -11,25 +11,25 @@
 #include <stdint.h>
 
 typedef enum : uint8_t {
-    P_ID,   // id
-    P_NEG,  // -E
-    P_DIV,  // /
-    P_TIME, // *
-    P_MIN,  // -
-    P_PLS,  // +
-    P_LT,   // <
-    P_LET,  // <=
-    P_GET,  // >=
-    P_GT,   // >
-    P_EQ,   // ==
-    P_NEQ,  // !=
-    P_LPAR, // (
-    P_RPAR, // )
-    P_COM,  // ,
-    P_LIT,  // int, double, string
-    P_END,  // $
-    P_EXP,  // E (represents reduced expression)
-    P_STOP, // stop elemnt inserted with shift
+    P_STACK_ID,   // id
+    P_STACK_NEG,  // -E
+    P_STACK_DIV,  // /
+    P_STACK_TIME, // *
+    P_STACK_MIN,  // -
+    P_STACK_PLS,  // +
+    P_STACK_LT,   // <
+    P_STACK_LET,  // <=
+    P_STACK_GET,  // >=
+    P_STACK_GT,   // >
+    P_STACK_EQ,   // ==
+    P_STACK_NEQ,  // !=
+    P_STACK_LPAR, // (
+    P_STACK_RPAR, // )
+    P_STACK_COM,  // ,
+    P_STACK_LIT,  // int, double, string
+    P_STACK_END,  // $
+    P_STACK_EXP,  // E (represents reduced expression)
+    P_STACK_STOP, // stop elemnt inserted with shift
 } PrecStackType;
 
 typedef struct PrecStackElemT {
@@ -42,16 +42,16 @@ typedef struct PrecStackT {
     PrecStackElem *top;
 } PrecStack;
 
-void initStack(PrecStack *stack);
+bool precInitStack(PrecStack *stack);
 
-void push(PrecStack *stack, PrecStackType type);
+bool precPush(PrecStack *stack, PrecStackType type);
 
-void pushAfterTerminal(PrecStack *stack, PrecStackType type);
+bool precPushAfterTerminal(PrecStack *stack, PrecStackType type);
 
-void pop(PrecStack *stack);
+bool precPop(PrecStack *stack);
 
 PrecStackElem *topTerminal(PrecStack *stack);
 
-void deleteStack(PrecStack *stack);
+bool precDeleteStack(PrecStack *stack);
 
 #endif // PRECSTACK_H
