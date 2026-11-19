@@ -13,6 +13,7 @@
 #include "symtableStack.h"
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -36,6 +37,128 @@ static ASTNode *unwrapBlock(ASTNode *node) {
         return node->data.block.firstStmt;
     }
     return node;
+}
+
+/**
+ * @brief Duplicates a C string on the heap
+ *
+ * @param src Source null-terminated string.
+ * @return Heap-allocated copy, or NULL on allocation failure.
+ */
+static char *dupCString(const char *src) {
+    if (src == NULL) {
+        return NULL;
+    }
+    size_t len = strlen(src) + 1;
+    char *copy = malloc(len);
+    if (copy != NULL) {
+        memcpy(copy, src, len);
+    }
+    return copy;
+}
+
+/**
+ * @brief Generates a unique mangled name for a variable within a function.
+ *
+ * @param funcName Enclosing function identifier.
+ * @param varName  Original variable identifier.
+ * @param varId    Monotonic counter unique within the enclosing function.
+ * @return Heap-allocated mangled name string, or NULL on allocation failure.
+ */
+static char *createMangledVarName(const char *funcName, const char *varName, size_t varId) {
+    if (funcName == NULL || varName == NULL) {
+        return NULL;
+    }
+    // Format: "<funcName>$<varName>$<varId>"
+    int needed = snprintf(NULL, 0, "%s$%s$%zu", funcName, varName, varId);
+    if (needed < 0) {
+        return NULL;
+    }
+    char *buf = malloc((size_t)needed + 1);
+    if (buf == NULL) {
+        return NULL;
+    }
+    needed = snprintf(buf, (size_t)needed + 1, "%s$%s$%zu", funcName, varName, varId);
+    if (needed < 0 || (size_t)needed >= SIZE_MAX) {
+        free(buf);
+        return NULL;
+    }
+    return buf;
+}
+
+/**
+ * @brief Generates a mangled name for a function (keeps `@main` recognizable or prefixes user
+ * funcs).
+ *
+ * @param funcName Original function name.
+ * @param isMain   True if annotated with `@main`.
+ * @return Heap-allocated mangled function name, or NULL on failure.
+ */
+static char *createMangledFuncName(const char *funcName, bool isMain) {
+    if (funcName == NULL) {
+        return NULL;
+    }
+    const char *prefix = (int)isMain ? "main$" : "fn$";
+    int needed = snprintf(NULL, 0, "%s%s", prefix, funcName);
+    if (needed < 0) {
+        return NULL;
+    }
+    char *buf = malloc((size_t)needed + 1);
+    if (buf == NULL) {
+        return NULL;
+    }
+    needed = snprintf(buf, (size_t)needed + 1, "%s%s", prefix, funcName);
+    if (needed < 0 || (size_t)needed >= SIZE_MAX) {
+        free(buf);
+        return NULL;
+    }
+    return buf;
+}
+
+/**
+ * @brief Appends a declared variable (or parameter) to the enclosing function's variable list.
+ *
+ * @param ctx         Semantic analysis context (with `currentFunc` set).
+ * @param origName    Original variable name.
+ * @param mangledName Mangled variable name (ownership transferred to the list entry).
+ * @param type        Resolved variable data type.
+ * @param isMutable   True if mutable (`var`), false if immutable (`val` or parameter).
+ * @return OK on success, ERR_INTERNAL on allocation failure.
+ */
+static uint8_t appendFuncVar(SemanticContext *ctx, const char *origName, char *mangledName,
+                             dataType type, bool isMutable) {
+    if (ctx == NULL || ctx->currentFunc == NULL || ctx->currentFunc->data.func.node == NULL) {
+        free(mangledName);
+        return ERR_INTERNAL;
+    }
+
+    ASTNode *funcNode = ctx->currentFunc->data.func.node;
+    FuncVarEntry *entry = calloc(1, sizeof(FuncVarEntry));
+    if (entry == NULL) {
+        free(mangledName);
+        return ERR_INTERNAL;
+    }
+
+    entry->origName = dupCString(origName);
+    if (entry->origName == NULL) {
+        free(mangledName);
+        free(entry);
+        return ERR_INTERNAL;
+    }
+
+    entry->mangledName = mangledName;
+    entry->type = type;
+    entry->isMutable = isMutable;
+    entry->next = NULL;
+
+    if (funcNode->data.funcDef.vars == NULL) {
+        funcNode->data.funcDef.vars = entry;
+    } else {
+        ctx->varListTail->next = entry;
+    }
+    ctx->varListTail = entry;
+    funcNode->data.funcDef.varCount++;
+    return OK;
 }
 
 /**
@@ -252,6 +375,16 @@ static uint8_t collectAllFunc(SemanticContext *ctx, ASTNode *functions) {
         funcInTable->data.func.beingEvaluated = false;
         funcInTable->data.func.hasReturnStmt = false;
         funcInTable->data.func.isMain = curr->data.funcDef.isMain;
+
+        funcInTable->mangledName =
+            createMangledFuncName(curr->data.funcDef.name, curr->data.funcDef.isMain);
+        if (funcInTable->mangledName == NULL) {
+            return ERR_INTERNAL;
+        }
+        curr->data.funcDef.mangledName = dupCString(funcInTable->mangledName);
+        if (curr->data.funcDef.mangledName == NULL) {
+            return ERR_INTERNAL;
+        }
 
         size_t paramCnt = getNumberOfParams(curr->data.funcDef.params);
         funcInTable->data.func.paramCount = paramCnt;
@@ -520,6 +653,17 @@ static uint8_t evaluateFuncCall(SemanticContext *ctx, ASTNode *expr, dataType *o
         }
     }
 
+    if (expr->data.funcCall.mangledName == NULL) {
+        if (func->data.func.isBuiltin) {
+            expr->data.funcCall.mangledName = dupCString(expr->data.funcCall.funcName);
+        } else {
+            expr->data.funcCall.mangledName = dupCString(func->mangledName);
+        }
+        if (expr->data.funcCall.mangledName == NULL) {
+            return ERR_INTERNAL;
+        }
+    }
+
     expr->semanticType = func->data.func.returnType;
     *outType = func->data.func.returnType;
     return OK;
@@ -550,6 +694,12 @@ static uint8_t evaluateVarRef(SemanticContext *ctx, ASTNode *expr, dataType *out
     symtableItem *item = findVarInScopes(ctx->localScopeStack, expr->data.varRef.name);
     if (item == NULL) {
         return ERR_SEM_UNDEFINED; /// Error 3: Undefined variable
+    }
+    if (expr->data.varRef.mangledName == NULL) {
+        expr->data.varRef.mangledName = dupCString(item->mangledName);
+        if (expr->data.varRef.mangledName == NULL) {
+            return ERR_INTERNAL;
+        }
     }
     expr->semanticType = item->data.var.type;
     *outType = item->data.var.type;
@@ -662,10 +812,29 @@ static uint8_t checkVarDecl(SemanticContext *ctx, ASTNode *decl) {
         return ERR_INTERNAL;
     }
 
+    char *mangled =
+        createMangledVarName(ctx->currentFunc->key, decl->data.varDecl.name, ctx->nextVarId);
+    ctx->nextVarId++;
+    if (mangled == NULL) {
+        return ERR_INTERNAL;
+    }
+
     var->kind = SYM_VAR;
     var->data.var.type = finalType;
     var->data.var.isMutable = decl->data.varDecl.isMutable;
-    decl->semanticType = TYPE_UNIT; /// A declaration statement evaluates to () (Unit) in a block
+    var->mangledName = mangled;
+
+    decl->data.varDecl.mangledName = dupCString(mangled);
+    if (decl->data.varDecl.mangledName == NULL) {
+        return ERR_INTERNAL;
+    }
+
+    uint8_t listErr = appendFuncVar(ctx, decl->data.varDecl.name, mangled, finalType,
+                                    decl->data.varDecl.isMutable);
+    if (listErr != OK) {
+        return listErr;
+    }
+    decl->semanticType = TYPE_UNIT;
     return OK;
 }
 
@@ -695,7 +864,12 @@ static uint8_t checkAssign(SemanticContext *ctx, ASTNode *assign) {
     if (!canAssignOrConvert(var->data.var.type, assign->data.assign.expr)) {
         return ERR_SEM_TYPE; /// Error 6: Incompatible type in assignment
     }
-
+    if (assign->data.assign.mangledName == NULL) {
+        assign->data.assign.mangledName = dupCString(var->mangledName);
+        if (assign->data.assign.mangledName == NULL) {
+            return ERR_INTERNAL;
+        }
+    }
     assign->semanticType = TYPE_UNIT;
     return OK;
 }
@@ -783,6 +957,7 @@ static uint8_t checkIfStmt(SemanticContext *ctx, ASTNode *stmt) {
         return err;
     }
 
+    stmt->data.ifStmt.idx = ctx->nextIfLabelId++;
     stmt->semanticType = TYPE_UNIT;
     return OK;
 }
@@ -810,6 +985,7 @@ static uint8_t checkWhileStmt(SemanticContext *ctx, ASTNode *stmt) {
         return err;
     }
 
+    stmt->data.whileStmt.idx = ctx->nextwhileLabelId++;
     stmt->semanticType = TYPE_UNIT;
     return OK;
 }
@@ -1062,9 +1238,16 @@ static uint8_t checkFunction(symtableItem *func, SemanticContext *ctx) {
     /// function
     symtableItem *prevFunc = ctx->currentFunc;
     stackPtr prevStack = ctx->localScopeStack;
+    FuncVarEntry *prevFuncTail = ctx->varListTail;
+    size_t prevVarId = ctx->nextVarId;
 
     ctx->currentFunc = func;
     ctx->localScopeStack = NULL;
+    ctx->nextVarId = 0;
+    ctx->varListTail = NULL;
+
+    funcNode->data.funcDef.vars = NULL;
+    funcNode->data.funcDef.varCount = 0;
 
     /// Create the top-level scope of the function body and insert formal parameters as immutable
     /// variables
@@ -1073,6 +1256,8 @@ static uint8_t checkFunction(symtableItem *func, SemanticContext *ctx) {
         func->data.func.beingEvaluated = false;
         ctx->currentFunc = prevFunc;
         ctx->localScopeStack = prevStack;
+        ctx->varListTail = prevFuncTail;
+        ctx->nextVarId = prevVarId;
         return ERR_INTERNAL;
     }
     push(scope, &ctx->localScopeStack);
@@ -1084,9 +1269,23 @@ static uint8_t checkFunction(symtableItem *func, SemanticContext *ctx) {
             err = ERR_INTERNAL;
             break;
         }
+        char *paramMangled =
+            createMangledVarName(func->key, func->data.func.params[i].name, ctx->nextVarId);
+        ctx->nextVarId++;
+        if (paramMangled == NULL) {
+            err = ERR_INTERNAL;
+            break;
+        }
         paramVar->kind = SYM_VAR;
         paramVar->data.var.type = func->data.func.params[i].type;
         paramVar->data.var.isMutable = false;
+        paramVar->mangledName = paramMangled;
+
+        err = appendFuncVar(ctx, func->data.func.params[i].name, paramMangled,
+                            func->data.func.params[i].type, false);
+        if (err != OK) {
+            break;
+        }
     }
 
     /// unwrapBlock handles both NODE_BLOCK and a direct pointer to the first statement
@@ -1097,10 +1296,10 @@ static uint8_t checkFunction(symtableItem *func, SemanticContext *ctx) {
     }
 
     pop(&ctx->localScopeStack);
-    /// Note: If your pop() implementation does not free `scope` internally, call
-    /// `symtableFree(scope);` here!
     ctx->currentFunc = prevFunc;
     ctx->localScopeStack = prevStack;
+    ctx->varListTail = prevFuncTail;
+    ctx->nextVarId = prevVarId;
 
     if (err != OK) {
         func->data.func.beingEvaluated = false;
@@ -1135,6 +1334,9 @@ uint8_t semantAnalyse(ASTNode *program) {
         .globalFuncTable = symtableInit(67),
         .currentFunc = NULL,
         .localScopeStack = NULL,
+        .nextIfLabelId = 0,
+        .nextwhileLabelId = 0,
+        .nextVarId = 0,
     };
     if (ctx.globalFuncTable == NULL) {
         return ERR_INTERNAL;

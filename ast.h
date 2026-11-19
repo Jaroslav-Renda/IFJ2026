@@ -59,6 +59,14 @@ typedef enum : uint8_t {
     UOP_PLUS,  /// +x
 } UnaryOpType;
 
+typedef struct FuncVarEntry {
+    char *origName;            /**< Original identifier name in source code. */
+    char *mangledName;         /**< Unique mangled name for code generation (e.g. "foo$x$1"). */
+    dataType type;             /**< Resolved/inferred data type of the variable. */
+    bool isMutable;            /**< True for `var`, false for `val` or parameter. */
+    struct FuncVarEntry *next; /**< Next variable in the function's variable list. */
+} FuncVarEntry;
+
 typedef struct ASTNode ASTNode;
 
 struct ASTNode {
@@ -93,11 +101,16 @@ struct ASTNode {
          */
         struct {
             char *name;
+            char *mangledName;
             dataType returnType;
             /// points to first param next are accesible through next*
             ASTNode *params;
             /// points to first statement in function body
             ASTNode *body;
+            /// Linked list of all variables belonging to this function.
+            FuncVarEntry *vars;
+            /// number of variables in function
+            size_t varCount;
             bool isMain;
         } funcDef;
 
@@ -114,6 +127,7 @@ struct ASTNode {
          */
         struct {
             char *name;
+            char *mangledName;
             /// UNKNOWN if not stated
             dataType varType;
             /// true for var, false for val
@@ -127,6 +141,7 @@ struct ASTNode {
          */
         struct {
             char *targetName;
+            char *mangledName;
             ASTNode *expr; /// Right hand side expresion
         } assign;
 
@@ -134,6 +149,8 @@ struct ASTNode {
          * @brief structure for data of node for if statement
          */
         struct {
+            /// unique index for code generator shared for all functions
+            size_t idx;
             /// points to root of condition expresion
             ASTNode *condition;
             /// pointer to first statement in then block
@@ -146,6 +163,8 @@ struct ASTNode {
          * @brief structure for data of node for while statement
          */
         struct {
+            /// unique index for code generator shared for all functions
+            size_t idx;
             /// condition expresion
             ASTNode *condition;
             /// points to first statement of the block
@@ -177,6 +196,7 @@ struct ASTNode {
          */
         struct {
             char *funcName;
+            char *mangledName;
             /// points to first argument next are accesible through next*
             ASTNode *args;
         } funcCall;
@@ -194,6 +214,7 @@ struct ASTNode {
          */
         struct {
             char *name;
+            char *mangledName;
         } varRef;
 
         /**
@@ -222,6 +243,13 @@ typedef struct {
     stackPtr localScopeStack;
     /// currently checked function
     symtableItem *currentFunc;
+    /// id of next variable reseted for each function
+    size_t nextVarId;
+    /// pointer to the end of linked list of variables of each function
+    FuncVarEntry *varListTail;
+    /// counters for globally unique `if`/`while` labels shared between functions
+    size_t nextwhileLabelId;
+    size_t nextIfLabelId;
 } SemanticContext;
 
 /**

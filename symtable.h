@@ -65,7 +65,8 @@ typedef struct {
 } symFuncData;
 
 typedef struct {
-    char *key; // identificator name
+    char *key;         // identificator name
+    char *mangledName; /// mangled name code for code generator
     slotState state;
     symKind kind; // SYM_VAR or SYM_FUNC
     union {
