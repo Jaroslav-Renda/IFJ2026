@@ -1258,6 +1258,8 @@ static uint8_t checkFunction(symtableItem *func, SemanticContext *ctx) {
     push(scope, &ctx->localScopeStack);
 
     uint8_t err = OK;
+    ASTNode *currParam = funcNode->data.funcDef.params;
+
     for (size_t i = 0; i < func->data.func.paramCount; i++) {
         symtableItem *paramVar = symtableLookupAdd(scope, func->data.func.params[i].name);
         if (paramVar == NULL) {
@@ -1271,7 +1273,6 @@ static uint8_t checkFunction(symtableItem *func, SemanticContext *ctx) {
             err = ERR_INTERNAL;
             break;
         }
-        ASTNode *currParam = funcNode->data.funcDef.params;
         paramVar->kind = SYM_VAR;
         paramVar->data.var.type = func->data.func.params[i].type;
         paramVar->data.var.isMutable = false;
@@ -1282,6 +1283,7 @@ static uint8_t checkFunction(symtableItem *func, SemanticContext *ctx) {
         if (err != OK) {
             break;
         }
+
         if (currParam != NULL) {
             currParam->data.param.mangledName = dupCString(paramMangled);
             if (currParam->data.param.mangledName == NULL) {

@@ -32,7 +32,7 @@ ASTNode *createNode(ASTNodeType type) {
 }
 
 static void deleteVarEntry(FuncVarEntry *entry) {
-    if (entry == NULL) { // <-- tohle ti tam chybělo; při vars == NULL spadne na entry->next
+    if (entry == NULL) {
         return;
     }
     if (entry->next != NULL) {
