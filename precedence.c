@@ -15,7 +15,9 @@
 #include <stdlib.h>
 #include "error.h"
 
-static bool nextToken(currentToken *cur) { return (getToken(&cur->token) != 1); }
+static bool nextToken(currentToken *cur) {
+    return (getToken(&cur->token) == OK);
+}
 
 static bool isExpressionEnd(Token *token) {
     switch (token->type) {
