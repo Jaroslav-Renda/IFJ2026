@@ -12,9 +12,7 @@
 #include <string.h>
 
 // helper function for getting next token with lexer error handeling
-static bool nextToken(currentToken *cur) {
-    return (getToken(&cur->token) == OK);
-}
+static bool nextToken(currentToken *cur) { return (getToken(&cur->token) == OK); }
 
 // helper function checking correct token type and loading next token
 static bool expectToken(currentToken *cur, tokenType expectedType, const char *errMsg) {
