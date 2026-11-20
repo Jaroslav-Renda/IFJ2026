@@ -6,7 +6,9 @@
  */
 
 #include "error.h"
+#include "lexer.h"
 #include "parser.h"
+#include <stdlib.h>
 
 int main() {
     currentToken cur;
