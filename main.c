@@ -1,25 +1,28 @@
 /**
  * @file    main.c
  * @brief   Main file for compiler startup
- * @author  Jaroslav Renda (xrendaj00)
+ * @author  Jakub Zenata (xzenatj00)
  * @details project_IFJ2026
  */
 
 #include "ast.h"
+#include "codegen.h"
 #include "error.h"
 #include "lexer.h"
 #include "parser.h"
+#include "semantAnalys.h"
 
 int main() {
     // Initialize the lexer
     lexerStateInit();
 
     currentToken cur;
-    ASTNode *root = createTree();
-    if (root == NULL) {
+    ASTNode *program = createTree();
+    if (program == NULL) {
         return ERR_INTERNAL;
     }
-    if (!parseProg(&cur)) {
+
+    if (!parseProg(&cur, program)) {
         if (errorReturnValue() == OK) {
 
             errorParser(cur.token.line, "failed to parse input program");
@@ -27,13 +30,11 @@ int main() {
         // po kazde failnute fazi bude potreba vratit error, aby nesel rozbity program dal
         return errorReturnValue();
     }
-    parseProg(&cur);
-
-    uint8_t semantResult = semantAnalyse(&root);
+    uint8_t semantResult = semantAnalyse(program);
     if (semantResult != 0) {
         return semantResult;
     }
-    codegenStart(&root);
-
+    codegenStart(program);
+    deleteNode(program);
     return errorReturnValue();
 }
