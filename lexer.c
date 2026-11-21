@@ -71,15 +71,14 @@ void lexerStateInit() {
     g_lexerState.pendingDivide = false;
 }
 static bool checkForKeyword(DynamicString *str1, keyword *detectedKeyword) {
-    static const KeywordPair keywords[] = {
-        {"def", KEYWORD_DEF},   {"do", KEYWORD_DO},         {"Double", KEYWORD_DOUBLE},
-        {"else", KEYWORD_ELSE}, {"if", KEYWORD_IF},         {"import", KEYWORD_IMPORT},
-        {"Int", KEYWORD_INT},   {"return", KEYWORD_RETURN}, {"String", KEYWORD_STRING},
-        {"then", KEYWORD_THEN}, {"Unit", KEYWORD_UNIT},     {"val", KEYWORD_VAL},
-        {"var", KEYWORD_VAR},   {"while", KEYWORD_WHILE},   {"Boolean", KEYWORD_BOOLEAN},
-        {"case", KEYWORD_CASE}, {"class", KEYWORD_CLASS},   {"extension", KEYWORD_EXTENSION},
-        {"for", KEYWORD_FOR},   {"List", KEYWORD_LIST},     {"match", KEYWORD_MATCH},
-        {"type", KEYWORD_TYPE}};
+    static const KeywordPair keywords[] = {{"def", KEYWORD_DEF}, {"do", KEYWORD_DO},
+        {"Double", KEYWORD_DOUBLE}, {"else", KEYWORD_ELSE}, {"if", KEYWORD_IF},
+        {"import", KEYWORD_IMPORT}, {"Int", KEYWORD_INT}, {"return", KEYWORD_RETURN},
+        {"String", KEYWORD_STRING}, {"then", KEYWORD_THEN}, {"Unit", KEYWORD_UNIT},
+        {"val", KEYWORD_VAL}, {"var", KEYWORD_VAR}, {"while", KEYWORD_WHILE},
+        {"Boolean", KEYWORD_BOOLEAN}, {"case", KEYWORD_CASE}, {"class", KEYWORD_CLASS},
+        {"extension", KEYWORD_EXTENSION}, {"for", KEYWORD_FOR}, {"List", KEYWORD_LIST},
+        {"match", KEYWORD_MATCH}, {"type", KEYWORD_TYPE}};
     for (int i = 0; i < KEYWORDS_COUNT; i++) {
         if (strCompare(str1, keywords[i].str) == 0) {
             *detectedKeyword = keywords[i].keywordVal;
@@ -396,8 +395,8 @@ int getToken(Token *token) {
                 }
                 currState = STATE_FULL_NUMBER;
             } else {
-                return lexicalErrorFree(&dynStr,
-                                        "expected digit after underscore in number literal");
+                return lexicalErrorFree(
+                    &dynStr, "expected digit after underscore in number literal");
             }
             break;
         }
@@ -454,8 +453,8 @@ int getToken(Token *token) {
                 }
                 currState = STATE_DECIMAL_NUMBER;
             } else {
-                return lexicalErrorFree(&dynStr,
-                                        "expected digit after underscore in decimal literal");
+                return lexicalErrorFree(
+                    &dynStr, "expected digit after underscore in decimal literal");
             }
             break;
         }
