@@ -84,7 +84,7 @@ bool parseStAfterLPar(currentToken *cur, ASTNode **statement) {
     }
 
     // not () -> expression (E)
-    if (!parseExpression(cur, &lat)) {
+    if (!parseExpression(cur, &lat, statement)) {
         return false;
     }
     return expectToken(cur, TOKEN_EOL, "expected EOL after expression");
@@ -116,14 +116,12 @@ bool parseStAfterId(currentToken *cur, ASTNode **statement) {
         tmpAssignNode->data.assign.targetName = lat.token.data.identifier;
         *statement = tmpAssignNode;
 
-        // TODO: ast in precedence
-        return parseExpression(cur, NULL);
+        return parseExpression(cur, NULL, &tmpAssignNode->data.assign.expr);
     }
 
     if (isLookaheadExpressionFirst(cur)) {
         lat.isEmpty = false;
-        // TODO: ast in precedence
-        return parseExpression(cur, &lat);
+        return parseExpression(cur, &lat, statement);
     }
 
     free(lat.token.data.identifier);
@@ -204,8 +202,7 @@ bool parseRetVal(currentToken *cur, ASTNode **expr) {
 
     // parse return expressioin
     if (isFirstExp(cur)) {
-        // TODO: ast in precedence
-        return parseExpression(cur, NULL);
+        return parseExpression(cur, NULL, expr);
     }
 
     errorParser(
@@ -228,8 +225,7 @@ static bool parseWhile(currentToken *cur, ASTNode **statement) {
     *statement = tmpWhile;
 
     // parse condition
-    // TODO: ast in precedence
-    if (!parseExpression(cur, NULL)) {
+    if (!parseExpression(cur, NULL, &tmpWhile->data.whileStmt.condition)) {
         return false;
     }
 
@@ -264,8 +260,7 @@ static bool parseIf(currentToken *cur, ASTNode **statement) {
     *statement = tmpIfNode;
 
     // parse condition
-    // TODO: ast in precedence
-    if (!parseExpression(cur, NULL)) {
+    if (!parseExpression(cur, NULL, &tmpIfNode->data.ifStmt.condition)) {
         return false;
     }
 
@@ -339,8 +334,7 @@ static bool parseVariableDec(currentToken *cur, bool isMutable, ASTNode **statem
         return false;
     }
 
-    // TODO: ast in precedence
-    return parseExpression(cur, NULL);
+    return parseExpression(cur, NULL, &tmpVarNode->data.varDecl.initExpr);
 }
 
 bool parseStat(currentToken *cur, ASTNode **statement) {
@@ -376,8 +370,7 @@ bool parseStat(currentToken *cur, ASTNode **statement) {
     }
 
     if (isFirstExp(cur)) {
-        // TODO: ast in precedence
-        return parseExpression(cur, NULL);
+        return parseExpression(cur, NULL, statement);
     }
 
     errorParser(cur->token.line, "Syntax error: expected 'val', 'var', 'return', or an expression");
@@ -476,8 +469,7 @@ bool parseFooBody(currentToken *cur, ASTNode **fooBody) {
 
     // parse one line function
     if (isFirstExp(cur)) {
-        // TODO: AST in precedence
-        if (!parseExpression(cur, NULL)) {
+        if (!parseExpression(cur, NULL, fooBody)) {
             return false;
         };
         return expectToken(
