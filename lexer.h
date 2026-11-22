@@ -54,6 +54,8 @@ enum automatState {
     STATE_MULTILINE_QUOTE1,
     STATE_MULTILINE_QUOTE2,
     STATE_MULTILINE_END,
+
+    STATE_PERIOD
 };
 
 /**

@@ -197,10 +197,8 @@ int getToken(Token *token) {
                 return 0;
             }
             if (znak == '.') {
-                token->type = TOKEN_PERIOD;
-                token->line = g_lexerState.currLine;
-                g_lexerState.lineHasCode = true;
-                return 0;
+                currState = STATE_PERIOD;
+                break;
             }
             if (znak == ',') {
                 token->type = TOKEN_COMMA;
@@ -1035,6 +1033,23 @@ int getToken(Token *token) {
             }
             (void)ungetc(znak, stdin);
             return finishStringToken(token, &dynStr);
+        }
+        case STATE_PERIOD: {
+            if (znak >= '0' && znak <= '9') {
+                if (strInit(&dynStr) != 0) {
+                    return internalError("memory allocation failed");
+                }
+                if (strAddChar(&dynStr, '.') != 0 || strAddChar(&dynStr, (char)znak) != 0) {
+                    return internalErrorFree(&dynStr, "memory allocation failed");
+                }
+                currState = STATE_DECIMAL_NUMBER;
+                break;
+            }
+            (void)ungetc(znak, stdin);
+            token->type = TOKEN_PERIOD;
+            token->line = g_lexerState.currLine;
+            g_lexerState.lineHasCode = true;
+            return 0;
         }
         default: {
             break;
