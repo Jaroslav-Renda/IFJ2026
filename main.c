@@ -11,6 +11,21 @@
 #include "lexer.h"
 #include "parser.h"
 #include "semantAnalys.h"
+#include <stdlib.h>
+
+void freeToken(Token *token) {
+    if (token == NULL) {
+        return;
+    }
+
+    if (token->type == TOKEN_IDENTIFIER && token->data.identifier != NULL) {
+        free(token->data.identifier);
+        token->data.identifier = NULL;
+    } else if (token->type == TOKEN_STRING && token->data.stringVal != NULL) {
+        free(token->data.stringVal);
+        token->data.stringVal = NULL;
+    }
+}
 
 int main() {
     // Initialize the lexer
@@ -27,11 +42,14 @@ int main() {
 
             errorParser(cur.token.line, "failed to parse input program");
         }
+        deleteNode(program);
+        freeToken(&cur.token);
         // po kazde failnute fazi bude potreba vratit error, aby nesel rozbity program dal
         return errorReturnValue();
     }
     uint8_t semantResult = semantAnalyse(program);
     if (semantResult != 0) {
+        deleteNode(program);
         return semantResult;
     }
     codegenStart(program);
