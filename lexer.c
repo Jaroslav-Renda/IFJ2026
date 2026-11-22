@@ -848,7 +848,14 @@ int getToken(Token *token) {
                 break; // bily znak je v poradku
             }
             if (znak == '\n') {
-                if (g_lexerState.lineHasCode && g_lexerState.bracketCount == 0) {
+                if (g_lexerState.bracketCount > 0) {
+                    g_lexerState.isNewLine = false;
+                    spaceCount = 0;
+                    g_lexerState.currLine++;
+                    currState = STATE_START;
+                    break;
+                }
+                if (g_lexerState.lineHasCode) {
                     spaceCount = 0;
                     g_lexerState.lineHasCode = false;
                     g_lexerState.isNewLine = true;
