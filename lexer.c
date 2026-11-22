@@ -299,6 +299,9 @@ int getToken(Token *token) {
                 break;
             }
             (void)ungetc(znak, stdin); // pretypovano na void kvuli clang tidy;
+            if (strCompare(&dynStr, "_") == 0) {
+                return lexicalErrorFree(&dynStr, "standalone '_' is not a valid identifier");
+            }
             keyword keywordVal;
             if (checkForKeyword(&dynStr, &keywordVal)) {
                 token->type = TOKEN_KEYWORD;
