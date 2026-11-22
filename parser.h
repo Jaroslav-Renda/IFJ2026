@@ -8,7 +8,9 @@
 #ifndef PARSER_H
 #define PARSER_H
 
+#include "ast.h"
 #include "lexer.h"
+#include "symtable.h"
 
 /**
  * @brief A wrapper structure for current loaded token
@@ -40,7 +42,7 @@ typedef struct {
  * @param[in,out] cur Pointer to the current token structure.
  * @return true if the entire program is syntactically valid, false otherwise.
  */
-bool parseProg(currentToken *cur);
+bool parseProg(currentToken *cur, ASTNode *program);
 
 /**
  * @brief Parses the sequence of top-level function declarations (<FOO-LIST>).
@@ -52,7 +54,7 @@ bool parseProg(currentToken *cur);
  * @param[in,out] cur Pointer to the current token structure.
  * @return true if the function list (or epsilon at EOF) is valid, false otherwise.
  */
-bool parseFooList(currentToken *cur);
+bool parseFooList(currentToken *cur, ASTNode **function);
 
 /**
  * @brief Parses a single function or main entry-point declaration (<FOO-DEC>).
@@ -68,7 +70,7 @@ bool parseFooList(currentToken *cur);
  * @param[in,out] cur Pointer to the current token structure.
  * @return true if the function header and body are valid, false otherwise.
  */
-bool parseFooDec(currentToken *cur);
+bool parseFooDec(currentToken *cur, ASTNode **function);
 
 /**
  * @brief Parses an optional end-of-line token (<OPT-EOL>).
@@ -95,7 +97,7 @@ bool parseOptEol(currentToken *cur);
  * @param[in,out] cur Pointer to the current token structure.
  * @return true if the parameter list (or empty list before ')') is valid, false otherwise.
  */
-bool parseParams(currentToken *cur);
+bool parseParams(currentToken *cur, ASTNode **fooParams);
 
 /**
  * @brief Parses the continuation of a parameter list (<NEXT-PARAM>).
@@ -107,7 +109,7 @@ bool parseParams(currentToken *cur);
  * @param[in,out] cur Pointer to the current token structure.
  * @return true if the parameter continuation or closing parenthesis follows, false otherwise.
  */
-bool parseNextParam(currentToken *cur);
+bool parseNextParam(currentToken *cur, ASTNode **nextParam);
 
 /**
  * @brief Parses the parameter following a comma separator (<AFTER-COM>).
@@ -121,7 +123,7 @@ bool parseNextParam(currentToken *cur);
  * @param[in,out] cur Pointer to the current token structure.
  * @return true if the tokens after the comma are valid, false otherwise.
  */
-bool parseAfterCom(currentToken *cur);
+bool parseAfterCom(currentToken *cur, ASTNode **nextParam);
 
 /**
  * @brief Parses the body of a function declaration (<FOO-BODY>).
@@ -135,7 +137,7 @@ bool parseAfterCom(currentToken *cur);
  * @param[in,out] cur Pointer to the current token structure.
  * @return true if the function body is syntactically valid, false otherwise.
  */
-bool parseFooBody(currentToken *cur);
+bool parseFooBody(currentToken *cur, ASTNode **fooBody);
 
 /**
  * @brief Parses an indented block of statements (<BLOCK>).
@@ -147,7 +149,7 @@ bool parseFooBody(currentToken *cur);
  * @return true if the block is properly indented, contains valid statements, and dedents, false
  * otherwise.
  */
-bool parseBlock(currentToken *cur);
+bool parseBlock(currentToken *cur, ASTNode **block);
 
 /**
  * @brief Parses a non-empty list of statements inside a block (<ST-LIST>).
@@ -159,7 +161,7 @@ bool parseBlock(currentToken *cur);
  * @param[in,out] cur Pointer to the current token structure.
  * @return true if the statement list is valid, false otherwise.
  */
-bool parseStList(currentToken *cur);
+bool parseStList(currentToken *cur, ASTNode **statement);
 
 /**
  * @brief Parses the mandatory delimiter after a simple statement (<ST-NEXT>).
@@ -173,7 +175,7 @@ bool parseStList(currentToken *cur);
  * @param[in,out] cur Pointer to the current token structure.
  * @return true if a valid statement delimiter and remaining statements follow, false otherwise.
  */
-bool parseStNext(currentToken *cur);
+bool parseStNext(currentToken *cur, ASTNode **nextStatement);
 
 /**
  * @brief Parses the remaining statements in a block (<ST-REST>).
@@ -188,7 +190,7 @@ bool parseStNext(currentToken *cur);
  * @param[in,out] cur Pointer to the current token structure.
  * @return true if the rest of the block is syntactically valid, false otherwise.
  */
-bool parseStRest(currentToken *cur);
+bool parseStRest(currentToken *cur, ASTNode **nextStatement);
 
 /**
  * @brief Parses a single-line simple statement (<STAT>).
@@ -203,7 +205,7 @@ bool parseStRest(currentToken *cur);
  * @param[in,out] cur Pointer to the current token structure.
  * @return true if the simple statement is valid, false otherwise.
  */
-bool parseStat(currentToken *cur);
+bool parseStat(currentToken *cur, ASTNode **statement);
 
 /**
  * @brief Parses a compound control-flow block statement (<BLOCK-STAT>).
@@ -215,7 +217,7 @@ bool parseStat(currentToken *cur);
  * @param[in,out] cur Pointer to the current token structure.
  * @return true if the conditional or loop statement is valid, false otherwise.
  */
-bool parseBlockStat(currentToken *cur);
+bool parseBlockStat(currentToken *cur, ASTNode **statement);
 
 /**
  * @brief Parses the optional return value expression (<RET-VAL>).
@@ -227,7 +229,7 @@ bool parseBlockStat(currentToken *cur);
  * @param[in,out] cur Pointer to the current token structure.
  * @return true if a valid expression or statement delimiter ("EOL", ";") follows, false otherwise.
  */
-bool parseRetVal(currentToken *cur);
+bool parseRetVal(currentToken *cur, ASTNode **expr);
 
 /**
  * @brief Parses an optional type annotation (<OPT-TYPE>).
@@ -241,7 +243,7 @@ bool parseRetVal(currentToken *cur);
  * @param[in,out] cur Pointer to the current token structure.
  * @return true if a valid type annotation or '=' token is found, false otherwise.
  */
-bool parseOptType(currentToken *cur);
+bool parseOptType(currentToken *cur, dataType *type);
 
 /**
  * @brief Parses a built-in data type keyword (<TYPE>).
@@ -255,7 +257,7 @@ bool parseOptType(currentToken *cur);
  * @param[in,out] cur Pointer to the current token structure.
  * @return true if the current token represents a valid data type, false otherwise.
  */
-bool parseType(currentToken *cur);
+bool parseType(currentToken *cur, dataType *type);
 
 /**
  * @brief Parses a statement after identificator token (ST-AFTER-ID).
@@ -269,6 +271,6 @@ bool parseType(currentToken *cur);
  * @param[in,out] cur Pointer to the current token structure.
  * @return true if the current token represents a valid continuation after id, false otherwise.
  */
-bool parseStAfterId(currentToken *cur);
+bool parseStAfterId(currentToken *cur, ASTNode **statement);
 
 #endif // !PARSER_H
