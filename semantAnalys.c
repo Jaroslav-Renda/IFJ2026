@@ -212,7 +212,7 @@ static uint8_t registerBuiltins(Symtable *table) {
         {"readLine", 0, TYPE_STRING, {TYPE_UNKNOWN}}, {"readInt", 0, TYPE_INT, {TYPE_UNKNOWN}},
         {"readDouble", 0, TYPE_DOUBLE, {TYPE_UNKNOWN}}, {"toStr", 1, TYPE_STRING, {TYPE_ANY}},
         {"toInt", 1, TYPE_INT, {TYPE_DOUBLE}}, {"strLength", 1, TYPE_INT, {TYPE_STRING}},
-        {"substr", 3, TYPE_STRING, {TYPE_STRING, TYPE_INT, TYPE_INT}},
+        {"subStr", 3, TYPE_STRING, {TYPE_STRING, TYPE_INT, TYPE_INT}},
         {"ord", 2, TYPE_INT, {TYPE_STRING, TYPE_INT}}, {"chr", 1, TYPE_STRING, {TYPE_INT}}};
 
     size_t count = sizeof(builtins) / sizeof(builtins[0]);

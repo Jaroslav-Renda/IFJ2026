@@ -318,7 +318,7 @@ void codegenWhile(ASTNode *node) {
 
 static bool codegenIsBuiltin(const char *name) {
     static const char *builtins[] = {"print", "readLine", "readInt", "readDouble", "toStr", "toInt",
-        "strLength", "substr", "ord", "chr"};
+        "strLength", "subStr", "ord", "chr"};
 
     for (size_t i = 0; i < sizeof(builtins) / sizeof(builtins[0]); i++) {
         if (strcmp(name, builtins[i]) == 0) {
@@ -457,7 +457,7 @@ static void codegenBuiltinCall(ASTNode *node) {
         OUTPUT("POPS %s%s\n", frame, tmp1);
         OUTPUT("STRLEN %s%s %s%s\n", frame, tmp2, frame, tmp1);
         OUTPUT("PUSHS %s%s\n", frame, tmp2);
-    } else if (strcmp(name, "substr") == 0) {
+    } else if (strcmp(name, "subStr") == 0) {
         // substr(str, start, end) - concatenate GETCHAR of str[start], ..., str[end - 1];
         // the third argument is the exclusive end index (ifj26.scala reference), so an
         // empty result falls out of the loop naturally when start >= end
