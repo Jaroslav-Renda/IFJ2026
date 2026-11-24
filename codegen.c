@@ -27,6 +27,9 @@ static bool codegenGeneratingMain = false;
 // Frame prefix for variable operands: "GF@" inside main, "LF@" everywhere else
 static const char *codegenFramePrefix(void) { return codegenGeneratingMain ? "GF@" : "LF@"; }
 
+// return type for the current function
+static dataType codegenReturnType = TYPE_UNIT;
+
 static void codegenEpilogue(void) {
     if (codegenGeneratingMain) {
         OUTPUT("EXIT int@0\n");
@@ -75,11 +78,13 @@ static void codegenLiteral(ASTNode *node) {
         }
         OUTPUT("\n");
         break;
-    case TYPE_UNKNOWN:
     case TYPE_UNIT:
+        OUTPUT("PUSHS nil@nil\n");
+        break;
+    case TYPE_UNKNOWN:
     case TYPE_ANY:
     case TYPE_BOOL:
-        ERROR("fix: hit unknown/unit/any in codegenInternal");
+        ERROR("fix: hit unknown/bool/any in codegenLiteral");
         break;
     }
 }
@@ -333,7 +338,12 @@ static void codegenBuiltinCall(ASTNode *node) {
     if (strcmp(name, "print") == 0) {
         codegenPostOrderExpr(arg);
         OUTPUT("POPS %s%s\n", frame, "tmp1s");
-        OUTPUT("WRITE %s%s\n", frame, "tmp1s");
+        if (arg->semanticType == TYPE_UNIT) {
+            OUTPUT("WRITE string@()\n");
+        } else {
+            OUTPUT("WRITE %s%s\n", frame, "tmp1s");
+        }
+        OUTPUT("PUSHS nil@nil\n");
     } else if (strcmp(name, "readLine") == 0) {
         OUTPUT("READ %s%s string\n", frame, "tmp1s");
         OUTPUT("PUSHS %s%s\n", frame, "tmp1s");
@@ -386,6 +396,10 @@ static void codegenBuiltinCall(ASTNode *node) {
             OUTPUT("PUSHS %s%s\n", frame, "tmp1s");
             break;
         }
+        case TYPE_UNIT:
+            OUTPUT("POPS %s%s\n", frame, "tmp1s");
+            OUTPUT("PUSHS string@()\n");
+            break;
         default:
             ERROR("toStr: unsupported argument type");
             break;
@@ -451,14 +465,25 @@ static void codegenFuncCall(ASTNode *node) {
     OUTPUT("CALL %s\n", node->data.funcCall.mangledName);
 }
 
+static void codegenReturnValue(ASTNode *expr) {
+    if (expr != NULL) {
+        codegenPostOrderExpr(expr);
+    }
+
+    if (codegenReturnType == TYPE_UNIT) {
+        if (expr != NULL) {
+            OUTPUT("POPS %stmp1s\n", codegenFramePrefix());
+        }
+        OUTPUT("PUSHS nil@nil\n");
+    }
+}
+
 static void codegenReturn(ASTNode *node) {
     if (node->type != NODE_RETURN) {
         ERROR("Called codegenReturn with incorrect node type");
     }
 
-    if (node->data.returnStmt.expr != NULL) {
-        codegenPostOrderExpr(node->data.returnStmt.expr);
-    }
+    codegenReturnValue(node->data.returnStmt.expr);
 
     codegenEpilogue();
 }
@@ -491,13 +516,14 @@ static void codegenWalk(ASTNode *node, bool inFuncBody) {
         case NODE_UNARY_OP:
         case NODE_FUNC_CALL:
         case NODE_LITERAL:
-            codegenPostOrderExpr(statement);
             if (inFuncBody && statement->next == NULL) {
                 // last expression of the function body is its implicit return value
+                codegenReturnValue(statement);
                 codegenEpilogue();
                 return;
             }
-            // probably shouldnt even get here
+            codegenPostOrderExpr(statement);
+            OUTPUT("POPS %stmp1s\n", codegenFramePrefix());
             statement = statement->next;
             break;
         case NODE_RETURN:
@@ -565,6 +591,7 @@ static void codegenFunctionDef(ASTNode *node) {
     // add function name
     bool isMain = node->data.funcDef.isMain;
     codegenGeneratingMain = isMain;
+    codegenReturnType = node->data.funcDef.returnType;
 
     if (isMain) {
         OUTPUT("LABEL main\n");
@@ -590,6 +617,8 @@ static void codegenFunctionDef(ASTNode *node) {
 
     // walk over code
     codegenWalk(node->data.funcDef.body, true);
+
+    codegenReturnValue(NULL);
 
     // end (dead code when the body already returned)
     codegenEpilogue();
