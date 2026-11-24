@@ -49,6 +49,28 @@ static void codegenLabelName(const char *prefix, char *buffer, size_t size) {
     snprintf(buffer, size, "%s$%i", prefix, codegenUniqueId());
 }
 
+// helper function to maintain 32 bit int in 64 bit
+static void codegenWrap(void) {
+    OUTPUT("LABEL ifj$wrap32\n");
+    OUTPUT("CREATEFRAME\n");
+    OUTPUT("PUSHFRAME\n");
+    OUTPUT("DEFVAR LF@x\n");
+    OUTPUT("DEFVAR LF@a\n");
+    OUTPUT("POPS LF@x\n");
+    OUTPUT("ADD LF@x LF@x int@2147483648\n");
+    OUTPUT("IDIV LF@a LF@x int@4294967296\n");
+    OUTPUT("MUL LF@a LF@a int@4294967296\n");
+    OUTPUT("SUB LF@x LF@x LF@a\n");
+    OUTPUT("LT LF@a LF@x int@0\n");
+    OUTPUT("JUMPIFEQ ifj$wrap32$pos LF@a bool@false\n");
+    OUTPUT("ADD LF@x LF@X int@4294967296\n");
+    OUTPUT("LABEL ifj$wrap32$pos\n");
+    OUTPUT("SUB LF@x LF@x int@2147483648\n");
+    OUTPUT("PUSHS LF@x\n");
+    OUTPUT("POPFRAME\n");
+    OUTPUT("RETURN\n");
+}
+
 static void codegenLiteral(ASTNode *node) {
     if (node->type != NODE_LITERAL) {
         ERROR("Called codegenLiteral with incorrect node type");
@@ -106,6 +128,7 @@ static void codegenUnaryOp(ASTNode *node) {
     switch (node->data.unaryOp.op) {
     case UOP_PLUS:
         codegenPostOrderExpr(node->data.unaryOp.operand);
+        OUTPUT("CALL ifj@wrap32\n");
         // identity - nothing to do
         break;
     case UOP_MINUS:
@@ -117,6 +140,9 @@ static void codegenUnaryOp(ASTNode *node) {
         }
         codegenPostOrderExpr(node->data.unaryOp.operand);
         OUTPUT("SUBS\n");
+        if (node->semanticType == TYPE_INT) {
+            OUTPUT("CALL ifj@wrap32\n");
+        }
         break;
     }
 }
@@ -142,18 +168,28 @@ static void codegenBinaryOp(ASTNode *node) {
             codegenConcat();
         } else {
             OUTPUT("ADDS\n");
+            if (node->semanticType == TYPE_INT) {
+                OUTPUT("CALL ifj@wrap32\n");
+            }
         }
         break;
     case OP_SUB:
         OUTPUT("SUBS\n");
+        if (node->semanticType == TYPE_INT) {
+            OUTPUT("CALL ifj@wrap32\n");
+        }
         break;
     case OP_MUL:
         OUTPUT("MULS\n");
+        if (node->semanticType == TYPE_INT) {
+            OUTPUT("CALL ifj@wrap32\n");
+        }
         break;
     case OP_DIV:
         // Int/Int is integer division, anything involving Double is float division
         if (node->semanticType == TYPE_INT) {
             OUTPUT("IDIVS\n");
+            OUTPUT("CALL ifj@wrap32\n");
         } else {
             OUTPUT("DIVS\n");
         }
@@ -536,6 +572,7 @@ static void codegenWalk(ASTNode *node, bool inFuncBody) {
     }
 }
 
+// helper function for substr
 static void codegenSubStrHelper(void) {
     OUTPUT("LABEL ifj$subStr\n");
     OUTPUT("CREATEFRAME\n");
