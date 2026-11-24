@@ -121,6 +121,7 @@ static void codegenClampDouble(void) {
 static void codegenLiteral(ASTNode *node) {
     if (node->type != NODE_LITERAL) {
         ERROR("Called codegenLiteral with incorrect node type");
+        return;
     }
 
     switch (node->data.literal.litType) {
@@ -161,6 +162,7 @@ static void codegenLiteral(ASTNode *node) {
 static void codegenVarRef(ASTNode *node) {
     if (node->type != NODE_VAR_REF) {
         ERROR("Called codegenLiteral with incorrect node type");
+        return;
     }
 
     OUTPUT("PUSHS %s%s\n", codegenFramePrefix(), node->data.varRef.mangledName);
@@ -169,6 +171,7 @@ static void codegenVarRef(ASTNode *node) {
 static void codegenUnaryOp(ASTNode *node) {
     if (node->type != NODE_UNARY_OP) {
         ERROR("Called codegenUnaryOp with incorrect node type");
+        return;
     }
 
     // the operand value ends up on the stack
@@ -209,6 +212,7 @@ static void codegenConcat(void) {
 static void codegenBinaryOp(ASTNode *node) {
     if (node->type != NODE_BIN_OP) {
         ERROR("Called codegenLiteral with incorrect node type");
+        return;
     }
 
     switch (node->data.binOp.op) {
@@ -321,6 +325,7 @@ static void codegenDefineFuncVars(ASTNode *node) {
 static void codegenVarDecl(ASTNode *node) {
     if (node->type != NODE_VAR_DECL) {
         ERROR("Called codegenVarDecl with incorrect node type");
+        return;
     }
 
     codegenPostOrderExpr(node->data.varDecl.initExpr);
@@ -331,6 +336,7 @@ static void codegenVarDecl(ASTNode *node) {
 static void codegenParam(ASTNode *node) {
     if (node->type != NODE_PARAM) {
         ERROR("Called codegenParam with incorrect node type");
+        return;
     }
 
     OUTPUT("DEFVAR %s%s\n", codegenFramePrefix(), node->data.param.mangledName);
@@ -340,6 +346,7 @@ static void codegenParam(ASTNode *node) {
 static void codegenAssign(ASTNode *node) {
     if (node->type != NODE_ASSIGN) {
         ERROR("Called codegenAssign with incorrect node type");
+        return;
     }
 
     codegenPostOrderExpr(node->data.assign.expr);
@@ -350,6 +357,7 @@ static void codegenAssign(ASTNode *node) {
 static void codegenIf(ASTNode *node) {
     if (node->type != NODE_IF) {
         ERROR("Called codegenIf with incorrect node type");
+        return;
     }
 
     char ifEndName[64];
@@ -373,6 +381,7 @@ static void codegenIf(ASTNode *node) {
 static void codegenWhile(ASTNode *node) {
     if (node->type != NODE_WHILE) {
         ERROR("Called codegenWhile with incorrect node type");
+        return;
     }
 
     char whileStartName[64];
@@ -540,6 +549,7 @@ static void codegenBuiltinCall(ASTNode *node) {
 static void codegenFuncCall(ASTNode *node) {
     if (node->type != NODE_FUNC_CALL) {
         ERROR("Called codegenFuncCall with incorrect node type");
+        return;
     }
 
     if (codegenIsBuiltin(node->data.funcCall.funcName)) {
@@ -567,6 +577,7 @@ static void codegenReturnValue(ASTNode *expr) {
 static void codegenReturn(ASTNode *node) {
     if (node->type != NODE_RETURN) {
         ERROR("Called codegenReturn with incorrect node type");
+        return;
     }
 
     codegenReturnValue(node->data.returnStmt.expr);
@@ -618,6 +629,7 @@ static void codegenWalk(ASTNode *node, bool inFuncBody) {
             return;
         default:
             ERROR("Unexpected type as statement");
+            return;
         }
     }
 }
@@ -673,6 +685,7 @@ static void codegenParamsReversed(ASTNode *param) {
 static void codegenFunctionDef(ASTNode *node) {
     if (node->type != NODE_FUNC_DEF) {
         ERROR("Called codegenFunctionDef with incorrect node type");
+        return;
     }
 
     // add function name
@@ -715,6 +728,7 @@ static void codegenFunctionDef(ASTNode *node) {
 void codegenStart(ASTNode *root) {
     if (root->type != NODE_PROGRAM) {
         ERROR("Called codegenStart with incorrect node type");
+        return;
     }
 
     // preamble
