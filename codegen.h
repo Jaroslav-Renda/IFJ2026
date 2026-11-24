@@ -10,8 +10,6 @@
 
 #include "ast.h"
 
-typedef enum : uint8_t { TF, LF, GF } codegenFrameTypes;
-
 void codegenLiteral(ASTNode *node);
 
 void codegenFuncDef(ASTNode *node);
