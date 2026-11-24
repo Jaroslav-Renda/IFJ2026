@@ -16,6 +16,11 @@
 #include <stdio.h>
 #include <string.h>
 
+// declarations for functions that are used before defined
+static void codegenPostOrderExpr(ASTNode *node);
+static void codegenFuncCall(ASTNode *node);
+static void codegenWalk(ASTNode *node, bool inFuncBody);
+
 // True while generating the @main function body
 static bool codegenGeneratingMain = false;
 
@@ -41,7 +46,7 @@ static void codegenLabelName(const char *prefix, char *buffer, size_t size) {
     snprintf(buffer, size, "%s$%i", prefix, codegenUniqueId());
 }
 
-void codegenLiteral(ASTNode *node) {
+static void codegenLiteral(ASTNode *node) {
     if (node->type != NODE_LITERAL) {
         ERROR("Called codegenLiteral with incorrect node type");
     }
@@ -79,7 +84,7 @@ void codegenLiteral(ASTNode *node) {
     }
 }
 
-void codegenVarRef(ASTNode *node) {
+static void codegenVarRef(ASTNode *node) {
     if (node->type != NODE_VAR_REF) {
         ERROR("Called codegenLiteral with incorrect node type");
     }
@@ -87,7 +92,7 @@ void codegenVarRef(ASTNode *node) {
     OUTPUT("PUSHS %s%s\n", codegenFramePrefix(), node->data.varRef.mangledName);
 }
 
-void codegenUnaryOp(ASTNode *node) {
+static void codegenUnaryOp(ASTNode *node) {
     if (node->type != NODE_UNARY_OP) {
         ERROR("Called codegenUnaryOp with incorrect node type");
     }
@@ -121,7 +126,7 @@ static void codegenConcat(void) {
     OUTPUT("PUSHS %s%s\n", frame, "tmp1s");
 }
 
-void codegenBinaryOp(ASTNode *node) {
+static void codegenBinaryOp(ASTNode *node) {
     if (node->type != NODE_BIN_OP) {
         ERROR("Called codegenLiteral with incorrect node type");
     }
@@ -175,7 +180,7 @@ void codegenBinaryOp(ASTNode *node) {
     }
 }
 
-void codegenPostOrderExpr(ASTNode *node) {
+static void codegenPostOrderExpr(ASTNode *node) {
     switch (node->type) {
     case NODE_LITERAL:
         codegenLiteral(node);
@@ -223,7 +228,7 @@ static void codegenDefineFuncVars(ASTNode *node) {
     }
 }
 
-void codegenVarDecl(ASTNode *node) {
+static void codegenVarDecl(ASTNode *node) {
     if (node->type != NODE_VAR_DECL) {
         ERROR("Called codegenVarDecl with incorrect node type");
     }
@@ -233,7 +238,7 @@ void codegenVarDecl(ASTNode *node) {
     OUTPUT("POPS %s%s\n", codegenFramePrefix(), node->data.varDecl.mangledName);
 }
 
-void codegenParam(ASTNode *node) {
+static void codegenParam(ASTNode *node) {
     if (node->type != NODE_PARAM) {
         ERROR("Called codegenParam with incorrect node type");
     }
@@ -242,7 +247,7 @@ void codegenParam(ASTNode *node) {
     OUTPUT("POPS %s%s\n", codegenFramePrefix(), node->data.param.mangledName);
 }
 
-void codegenAssign(ASTNode *node) {
+static void codegenAssign(ASTNode *node) {
     if (node->type != NODE_ASSIGN) {
         ERROR("Called codegenAssign with incorrect node type");
     }
@@ -252,7 +257,7 @@ void codegenAssign(ASTNode *node) {
     OUTPUT("POPS %s%s\n", codegenFramePrefix(), node->data.assign.mangledName);
 }
 
-void codegenIf(ASTNode *node) {
+static void codegenIf(ASTNode *node) {
     if (node->type != NODE_IF) {
         ERROR("Called codegenIf with incorrect node type");
     }
@@ -275,7 +280,7 @@ void codegenIf(ASTNode *node) {
     OUTPUT("LABEL %s\n", ifEndName);
 }
 
-void codegenWhile(ASTNode *node) {
+static void codegenWhile(ASTNode *node) {
     if (node->type != NODE_WHILE) {
         ERROR("Called codegenWhile with incorrect node type");
     }
@@ -432,7 +437,7 @@ static void codegenBuiltinCall(ASTNode *node) {
     }
 }
 
-void codegenFuncCall(ASTNode *node) {
+static void codegenFuncCall(ASTNode *node) {
     if (node->type != NODE_FUNC_CALL) {
         ERROR("Called codegenFuncCall with incorrect node type");
     }
@@ -446,7 +451,7 @@ void codegenFuncCall(ASTNode *node) {
     OUTPUT("CALL %s\n", node->data.funcCall.mangledName);
 }
 
-void codegenReturn(ASTNode *node) {
+static void codegenReturn(ASTNode *node) {
     if (node->type != NODE_RETURN) {
         ERROR("Called codegenReturn with incorrect node type");
     }
@@ -458,7 +463,7 @@ void codegenReturn(ASTNode *node) {
     codegenEpilogue();
 }
 
-void codegenWalk(ASTNode *node, bool inFuncBody) {
+static void codegenWalk(ASTNode *node, bool inFuncBody) {
     ASTNode *statement = node;
     while (statement != NULL) {
         switch (statement->type) {
@@ -552,7 +557,7 @@ static void codegenParamsReversed(ASTNode *param) {
     codegenParam(param);
 }
 
-void codegenFunctionDef(ASTNode *node) {
+static void codegenFunctionDef(ASTNode *node) {
     if (node->type != NODE_FUNC_DEF) {
         ERROR("Called codegenFunctionDef with incorrect node type");
     }
@@ -563,9 +568,9 @@ void codegenFunctionDef(ASTNode *node) {
 
     if (isMain) {
         OUTPUT("LABEL main\n");
-    } else {
-        OUTPUT("LABEL %s\n", node->data.funcDef.mangledName);
     }
+
+    OUTPUT("LABEL %s\n", node->data.funcDef.mangledName);
 
     // main is entered by JUMP and uses global frame
     if (!isMain) {
