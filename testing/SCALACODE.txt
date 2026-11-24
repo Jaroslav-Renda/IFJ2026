@@ -1,0 +1,165 @@
+SCALACODE
+1:
+import ifj26.*
+@main def main(): Unit =
+    val a = 10
+    val b = 3
+    val sum = a + b * 2
+    val neg = -a + 2.5
+    print(sum)
+    print(" ")
+    print(neg)
+    
+2:
+import ifj26.*
+def fact(n: Int): Int =
+    if n <= 1 then
+        return 1
+    else
+        return n * fact(n - 1)
+@main def main(): Unit =
+    val res = fact(5)
+    print(res)
+    
+3:
+import ifj26.*
+@main def main(): Unit =
+    var i = 1
+    var sum = 0
+    var x = 100
+    while i <= 5 do
+        val x = i * 2
+        sum = sum + i
+        i = i + 1
+    print(sum)
+    print(" ")
+    print(x)
+    
+4:
+import ifj26.*
+@main def main(): Unit =
+    val s = "IFJ" + "2026"
+    val len = strLength(s)
+    val sub = substr(s, 0, 3)
+    val code = ord(s, 0)
+    val ch = chr(65)
+    print(s)
+    print(" ")
+    print(len)
+    print(" ")
+    print(sub)
+    print(" ")
+    print(code)
+    print(" ")
+    print(ch)
+    
+5:
+import ifj26.*
+def diff(a: Int, b: Int): Int = a - b
+@main def main(): Unit =
+    val x = readInt()
+    val y = readInt()
+    print(diff(x, y))
+6:
+import ifj26.*
+def gcd(a: Int, b: Int): Int =
+    if a == b then
+        return a
+    else
+        if a > b then
+            return gcd(a - b, b)
+        else
+            return gcd(a, b - a)
+def evenSum(n: Int): Int =
+    if n <= 0 then
+        return 0
+    else
+        return n + oddSum(n - 1)
+def oddSum(n: Int): Int =
+    if n <= 0 then
+        return 0
+    else
+        return 2 * n + evenSum(n - 1)
+def blend(
+x: Int,
+y: Double,
+z: Int
+): Double = -(x - z * 2) + y / 2
+def forwardInferred(k: Int) = helperTail(k) + 0.5
+def helperTail(m: Int) =
+    val tmp = m * 3 - 1
+    tmp
+def stringCheck(prefix: String, code: Int): Int =
+    val full = prefix + chr(code) + "26"
+    val part = substr(full, 0, 4)
+    val len = strLength(full)
+    val firstOrd = ord(part, 0)
+    if part < full then
+        if part != full then
+            return len * 100 + firstOrd
+        else
+            return -1
+    else
+        return -2
+@main def main(): Unit =
+    val g = gcd(48, 18)
+    val ms = evenSum(5)
+    var acc = 0; var i = 1
+    var shadow = 777
+    while i <= 6 do
+        val shadow = i * 10
+        if i == 3 then
+            val inner = shadow + 5
+            acc = acc + inner
+        else
+            val inner = shadow / 2
+            acc = acc + inner
+        i = i + 1
+    val bVal: Double = blend(g, 5, 4)
+    val fVal: Double = forwardInferred(4)
+    val combinedInt: Int = toInt(bVal + fVal + 0.75)
+    val strScore = stringCheck("IFJ", 45)
+    print(g)
+    print(" ")
+    print(ms)
+    print(" ")
+    print(acc)
+    print(" ")
+    print(shadow)
+    print(" ")
+    print(combinedInt)
+    print(" ")
+    print(strScore)
+
+7: 
+import ifj26.*
+@main def main(): Unit =
+    val flag = 1
+    if flag == 1 then
+        val secret = 42
+        print(secret)
+    else
+        val secret = 99
+        print(secret)
+    print(secret)
+    
+8:
+import ifj26.*
+def ping(n: Int) = pong(n - 1) + 1
+def pong(n: Int) = ping(n - 1) + 2
+@main def main(): Unit =
+    val res = ping(4)
+    print(res)
+    
+9:
+import ifj26.*
+def accumulate(limit: Int): Int =
+    var sum = 0
+    var i = 0
+    while i < limit do
+        sum = sum + i
+        limit = limit - 1
+        i = i + 1
+    sum
+@main def main(): Unit =
+    print(accumulate(5))
