@@ -75,8 +75,14 @@ editorconfig:
 		exit 1; \
 	fi
 
-test:
-	mkdir ./test_f
+test: build
+	python3 testing/run_simple_tests.py --bin ./compiler --int ./ic26int-linux-x86_64 --verbose
+
+test-valgrind: build
+	python3 testing/run_simple_tests.py --bin ./compiler --int ./ic26int-linux-x86_64 --valgrind --verbose
+
+test-logs: build
+	python3 testing/run_simple_tests.py --bin ./compiler --int ./ic26int-linux-x86_64 --save-logs testing
 
 run: build
 	./compiler
@@ -90,4 +96,4 @@ clean:
 %.o: %.c
 	$(CC) $(CFLAGS) -c $^ -o $@
 
-.PHONY: run clean build check build-check cppcheck tidy tidy-fix format format-fix test run_valgrind editorconfig
+.PHONY: run clean build check build-check cppcheck tidy tidy-fix format format-fix test test-valgrind test-logs run_valgrind editorconfig
