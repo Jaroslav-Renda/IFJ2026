@@ -197,10 +197,8 @@ int getToken(Token *token) {
                 return 0;
             }
             if (znak == '.') {
-                token->type = TOKEN_PERIOD;
-                token->line = g_lexerState.currLine;
-                g_lexerState.lineHasCode = true;
-                return 0;
+                currState = STATE_PERIOD;
+                break;
             }
             if (znak == ',') {
                 token->type = TOKEN_COMMA;
@@ -301,6 +299,9 @@ int getToken(Token *token) {
                 break;
             }
             (void)ungetc(znak, stdin); // pretypovano na void kvuli clang tidy;
+            if (strCompare(&dynStr, "_") == 0) {
+                return lexicalErrorFree(&dynStr, "standalone '_' is not a valid identifier");
+            }
             keyword keywordVal;
             if (checkForKeyword(&dynStr, &keywordVal)) {
                 token->type = TOKEN_KEYWORD;
@@ -847,7 +848,14 @@ int getToken(Token *token) {
                 break; // bily znak je v poradku
             }
             if (znak == '\n') {
-                if (g_lexerState.lineHasCode && g_lexerState.bracketCount == 0) {
+                if (g_lexerState.bracketCount > 0) {
+                    g_lexerState.isNewLine = false;
+                    spaceCount = 0;
+                    g_lexerState.currLine++;
+                    currState = STATE_START;
+                    break;
+                }
+                if (g_lexerState.lineHasCode) {
                     spaceCount = 0;
                     g_lexerState.lineHasCode = false;
                     g_lexerState.isNewLine = true;
@@ -1035,6 +1043,23 @@ int getToken(Token *token) {
             }
             (void)ungetc(znak, stdin);
             return finishStringToken(token, &dynStr);
+        }
+        case STATE_PERIOD: {
+            if (znak >= '0' && znak <= '9') {
+                if (strInit(&dynStr) != 0) {
+                    return internalError("memory allocation failed");
+                }
+                if (strAddChar(&dynStr, '.') != 0 || strAddChar(&dynStr, (char)znak) != 0) {
+                    return internalErrorFree(&dynStr, "memory allocation failed");
+                }
+                currState = STATE_DECIMAL_NUMBER;
+                break;
+            }
+            (void)ungetc(znak, stdin);
+            token->type = TOKEN_PERIOD;
+            token->line = g_lexerState.currLine;
+            g_lexerState.lineHasCode = true;
+            return 0;
         }
         default: {
             break;
