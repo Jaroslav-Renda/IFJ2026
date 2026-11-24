@@ -1,0 +1,21 @@
+import ifj26.*
+
+@main def m(): Unit =
+  val a = 1.0 / 4
+  val sa = toStr(a)
+  print(sa)
+  print(" ")
+  val b = 1 + 0.5
+  val sb = toStr(b)
+  print(sb)
+  print(" ")
+  val c = 3 / 2.0
+  val sc = toStr(c)
+  print(sc)
+  print(" ")
+  val d = -2.5
+  print(d)
+  print(" ")
+  val e = 2 * 1.25
+  print(e)
+  print("\n")

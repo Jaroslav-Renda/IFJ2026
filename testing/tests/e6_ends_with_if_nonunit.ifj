@@ -1,0 +1,9 @@
+import ifj26.*
+
+def f(x: Int): Int =
+  if x < 1 then
+    print(1)
+  else
+    ()
+@main def m(): Unit =
+  print(1)

@@ -1,0 +1,18 @@
+import ifj26.*
+
+def add3(a: Int,
+         b: Int,
+         c: Int,
+): Int = a + b + c
+
+@main def m(): Unit =
+  val a = 1; val b = 2
+  val z = (a +
+    b)
+  print(z)
+  print(" ")
+  val s = add3(1,
+    2,
+    3,
+  )
+  print(s); print("\n")

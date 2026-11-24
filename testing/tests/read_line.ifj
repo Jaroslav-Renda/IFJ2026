@@ -1,0 +1,15 @@
+import ifj26.*
+
+@main def m(): Unit =
+  val a = readLine()
+  print("[")
+  print(a)
+  print("]")
+  val b = readLine()
+  print("[")
+  print(b)
+  print("]")
+  val c = readLine()
+  print("[")
+  print(c)
+  print("]\n")

@@ -1,0 +1,6 @@
+import ifj26.*
+def _f(_a: Int): Int = _a
+@main def m(): Unit =
+  val _x1 = 5
+  val r = _f(_x1)
+  print(r)

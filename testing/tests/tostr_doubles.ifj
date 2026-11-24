@@ -1,0 +1,12 @@
+import ifj26.*
+@main def m(): Unit =
+  val a = toStr(2.345)
+  val b = toStr(-0.5)
+  val c = toStr(1e10)
+  val d = toInt(-2.9)
+  val e = toStr(d)
+  print(a + " " + b + " " + c + " " + e + "\n")
+  print(1e10)
+  print(" ")
+  print(-0.1)
+  print("\n")

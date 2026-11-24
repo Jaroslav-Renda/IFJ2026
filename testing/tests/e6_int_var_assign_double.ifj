@@ -1,0 +1,5 @@
+import ifj26.*
+
+@main def m(): Unit =
+  var a = 1
+  a = 2.5

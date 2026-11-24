@@ -1,0 +1,8 @@
+// leading comment
+/* block
+   comment */
+import   ifj26 . *
+@main
+def m(): Unit =
+  val/**/x = 1 /* inline */ + 2
+  print(x)

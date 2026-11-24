@@ -1,0 +1,5 @@
+import ifj26.*
+
+def f(a: Int): Int = a
+@main def m(): Unit =
+  val x = f(1.5)

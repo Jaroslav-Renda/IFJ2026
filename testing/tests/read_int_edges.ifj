@@ -1,0 +1,9 @@
+import ifj26.*
+@main def m(): Unit =
+  var i = 0
+  while i < 8 do
+    val n = readInt()
+    print(n)
+    print(" ")
+    i = i + 1
+  print("\n")

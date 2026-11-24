@@ -1,0 +1,43 @@
+import ifj26.*
+
+def show(x: String): Unit =
+  print(x)
+
+@main def m(): Unit =
+  if "abc" < "abd" then
+    show("T")
+  else
+    show("F")
+  if "b" > "abc" then
+    show("T")
+  else
+    show("F")
+  if 1 == 1.0 then
+    show("T")
+  else
+    show("F")
+  if 1 != 2 then
+    show("T")
+  else
+    show("F")
+  if 2 <= 2 then
+    show("T")
+  else
+    show("F")
+  if 3 >= 4 then
+    show("T")
+  else
+    show("F")
+  if 2.5 > 2 then
+    show("T")
+  else
+    show("F")
+  if "a" == "a" then
+    show("T")
+  else
+    show("F")
+  if "" < "a" then
+    show("T")
+  else
+    show("F")
+  print("\n")

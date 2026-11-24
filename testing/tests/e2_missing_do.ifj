@@ -1,0 +1,5 @@
+import ifj26.*
+
+@main def m(): Unit =
+  while 1 < 2
+    print(1)

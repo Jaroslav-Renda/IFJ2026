@@ -1,0 +1,14 @@
+import ifj26.*
+
+def sum(n: Int): Int =
+  if n == 0 then
+    return 0
+  else
+    ()
+  val r = sum(n - 1)
+  r + n
+
+@main def m(): Unit =
+  val s = sum(5000)
+  print(s)
+  print("\n")

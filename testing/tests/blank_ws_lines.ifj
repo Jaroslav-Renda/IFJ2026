@@ -1,0 +1,10 @@
+import ifj26.*
+@main def m(): Unit =
+  val x = 1
+        
+   
+  print(x)
+
+  // comment at other indent
+      // another
+  print("\n")

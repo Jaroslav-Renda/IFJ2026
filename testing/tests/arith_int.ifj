@@ -1,0 +1,30 @@
+import ifj26.*
+
+@main def m(): Unit =
+  val a = 2 + 3 * 4
+  print(a)
+  print(" ")
+  val b = (2 + 3) * 4
+  print(b)
+  print(" ")
+  val c = 7 / 2
+  print(c)
+  print(" ")
+  val d = -7 / 2
+  print(d)
+  print(" ")
+  val e = 7 / -2
+  print(e)
+  print(" ")
+  val f = 10 - 2 - 3
+  print(f)
+  print(" ")
+  val g = 2 * 3 / 4
+  print(g)
+  print(" ")
+  val h = -(-5)
+  print(h)
+  print(" ")
+  val i = 100 / 10 / 5
+  print(i)
+  print("\n")

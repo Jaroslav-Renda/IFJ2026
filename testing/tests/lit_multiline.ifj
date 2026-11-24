@@ -1,0 +1,8 @@
+import ifj26.*
+
+@main def m(): Unit =
+  val x = """A
+  hoj s\nvete
+    """
+  print(x)
+  print("|\n")

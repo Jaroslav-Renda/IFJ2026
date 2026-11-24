@@ -1,0 +1,24 @@
+import ifj26.*
+
+@main def m(): Unit =
+  val a = 1.5
+  print(a)
+  print("\n")
+  val b = .5
+  print(b)
+  print("\n")
+  val c = 1e3
+  print(c)
+  print("\n")
+  val d = 10.25E0
+  print(d)
+  print("\n")
+  val e = 1_0.2_5
+  print(e)
+  print("\n")
+  val f = 2.5d
+  print(f)
+  print("\n")
+  val g = 1E+2D
+  print(g)
+  print("\n")

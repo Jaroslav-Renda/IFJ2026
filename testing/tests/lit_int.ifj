@@ -1,0 +1,12 @@
+import ifj26.*
+
+@main def m(): Unit =
+  val a = 1_000_000
+  print(a)
+  print("\n")
+  val b = 0
+  print(b)
+  print("\n")
+  val c = -42
+  print(c)
+  print("\n")

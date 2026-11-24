@@ -1,0 +1,16 @@
+import ifj26.*
+def find(limit: Int): Int =
+  var i = 0
+  while i < limit do
+    if i * i > 50 then
+      return i
+    else
+      i = i + 1
+  return -1
+@main def m(): Unit =
+  val a = find(100)
+  val b = find(3)
+  print(a)
+  print(" ")
+  print(b)
+  print("\n")

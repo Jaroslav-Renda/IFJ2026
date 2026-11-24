@@ -1,0 +1,6 @@
+import ifj26.*
+
+def f(n: Int) =
+  f(n)
+@main def m(): Unit =
+  print(1)

@@ -1,0 +1,10 @@
+import ifj26.*
+
+// line comment
+/* block /* nested */ still comment */
+@main def m(): Unit =
+  val a = 1 /* inline */ + 2
+  print(a) // trailing
+  /* multi
+     line */
+  print("\n")

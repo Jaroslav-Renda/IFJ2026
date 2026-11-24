@@ -1,0 +1,8 @@
+import ifj26.*
+def nothing(): Unit = print("")
+@main def m(): Unit =
+  val u = nothing()
+  if u == () then
+    print("eq\n")
+  else
+    print("ne\n")

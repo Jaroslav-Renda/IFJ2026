@@ -1,0 +1,5 @@
+import ifj26.*
+
+@main def m(): Unit =
+  val x = toInt(5)
+  print(x)

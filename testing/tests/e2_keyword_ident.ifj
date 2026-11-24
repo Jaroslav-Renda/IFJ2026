@@ -1,0 +1,4 @@
+import ifj26.*
+@main def m(): Unit =
+  val while = 1
+  print(1)

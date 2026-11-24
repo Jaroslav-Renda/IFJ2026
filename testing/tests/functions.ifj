@@ -1,0 +1,75 @@
+import ifj26.*
+
+@main def m(): Unit =
+  val a = sub(10, 3)
+  print(a)
+  print(" ")
+  val b = fib(10)
+  print(b)
+  print(" ")
+  val c = isEven(10)
+  print(c)
+  print(" ")
+  val d = sq(7)
+  print(d)
+  print(" ")
+  val e = inc(4)
+  print(e)
+  print(" ")
+  val f = greet("Bob")
+  print(f)
+  print(" ")
+  val g = asDouble(3)
+  print(g)
+  print(" ")
+  val h = firstOver(10)
+  print(h)
+  print(" ")
+  val i = callsSq(5)
+  print(i)
+  print("\n")
+
+def sub(a: Int, b: Int): Int = a - b
+
+def fib(n: Int): Int =
+  if n < 2 then
+    return n
+  else
+    ()
+  val a = fib(n - 1)
+  val b = fib(n - 2)
+  a + b
+
+def isEven(n: Int): Int =
+  if n == 0 then
+    return 1
+  else
+    return isOdd(n - 1)
+
+def isOdd(n: Int): Int =
+  if n == 0 then
+    return 0
+  else
+    return isEven(n - 1)
+
+def sq(x: Int): Int = x * x
+
+def inc(x: Int) = x + 1
+
+def greet(name: String): String =
+  val p = "Hi "
+  p + name
+
+def asDouble(d: Double): String = toStr(d)
+
+def firstOver(limit: Int): Int =
+  var i = 0
+  while i >= 0 do
+    if i * i > limit then
+      return i
+    else
+      ()
+    i = i + 1
+  return -1
+
+def callsSq(x: Int): Int = sq(x)

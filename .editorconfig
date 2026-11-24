@@ -14,3 +14,12 @@ max_line_length = 100
 
 [Makefile]
 indent_style = tab
+
+# Test data: byte-exact inputs/outputs (trailing spaces, \r, tabs are intentional)
+[testing/tests/**]
+charset = unset
+end_of_line = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset
+indent_style = unset
+indent_size = unset
