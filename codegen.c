@@ -54,19 +54,66 @@ static void codegenWrap(void) {
     OUTPUT("LABEL ifj$wrap32\n");
     OUTPUT("CREATEFRAME\n");
     OUTPUT("PUSHFRAME\n");
+
     OUTPUT("DEFVAR LF@x\n");
     OUTPUT("DEFVAR LF@a\n");
+
     OUTPUT("POPS LF@x\n");
     OUTPUT("ADD LF@x LF@x int@2147483648\n");
     OUTPUT("IDIV LF@a LF@x int@4294967296\n");
     OUTPUT("MUL LF@a LF@a int@4294967296\n");
     OUTPUT("SUB LF@x LF@x LF@a\n");
+
     OUTPUT("LT LF@a LF@x int@0\n");
     OUTPUT("JUMPIFEQ ifj$wrap32$pos LF@a bool@false\n");
-    OUTPUT("ADD LF@x LF@X int@4294967296\n");
+    OUTPUT("ADD LF@x LF@x int@4294967296\n");
+
     OUTPUT("LABEL ifj$wrap32$pos\n");
     OUTPUT("SUB LF@x LF@x int@2147483648\n");
+
     OUTPUT("PUSHS LF@x\n");
+
+    OUTPUT("POPFRAME\n");
+    OUTPUT("RETURN\n");
+}
+
+// helper for clamping floats
+static void codegenClampDouble(void) {
+    OUTPUT("LABEL ifj$clamp32\n");
+    OUTPUT("CREATEFRAME\n");
+    OUTPUT("PUSHFRAME\n");
+
+    OUTPUT("DEFVAR LF@x\n");
+    OUTPUT("POPS LF@x\n");
+
+    OUTPUT("DEFVAR LF@a\n");
+    OUTPUT("DEFVAR LF@b\n");
+
+    OUTPUT("DEFVAR LF@max\n");
+    OUTPUT("DEFVAR LF@min\n");
+
+    OUTPUT("MOVE LF@max float@0x1.fffffffcp+30\n");
+    OUTPUT("MOVE LF@min float@-0x1p+31\n");
+
+    OUTPUT("GT LF@a LF@x LF@max\n");
+    OUTPUT("LT LF@b LF@x LF@min\n");
+
+    OUTPUT("JUMPIFEQ ifj$clamp32$above LF@a bool@true\n");
+    OUTPUT("JUMPIFEQ ifj$clamp32$below LF@b bool@true\n");
+    OUTPUT("JUMP ifj$clamp32$inside\n");
+
+    OUTPUT("LABEL ifj$clamp32$above\n");
+    OUTPUT("PUSHS LF@max\n");
+    OUTPUT("JUMP ifj$clamp32$end\n");
+
+    OUTPUT("LABEL ifj$clamp32$below\n");
+    OUTPUT("PUSHS LF@min\n");
+    OUTPUT("JUMP ifj$clamp32$end\n");
+
+    OUTPUT("LABEL ifj$clamp32$inside\n");
+    OUTPUT("PUSHS LF@x\n");
+
+    OUTPUT("LABEL ifj$clamp32$end\n");
     OUTPUT("POPFRAME\n");
     OUTPUT("RETURN\n");
 }
@@ -128,7 +175,9 @@ static void codegenUnaryOp(ASTNode *node) {
     switch (node->data.unaryOp.op) {
     case UOP_PLUS:
         codegenPostOrderExpr(node->data.unaryOp.operand);
-        OUTPUT("CALL ifj@wrap32\n");
+        if (node->semanticType == TYPE_INT) {
+            OUTPUT("CALL ifj$wrap32\n");
+        }
         // identity - nothing to do
         break;
     case UOP_MINUS:
@@ -141,7 +190,7 @@ static void codegenUnaryOp(ASTNode *node) {
         codegenPostOrderExpr(node->data.unaryOp.operand);
         OUTPUT("SUBS\n");
         if (node->semanticType == TYPE_INT) {
-            OUTPUT("CALL ifj@wrap32\n");
+            OUTPUT("CALL ifj$wrap32\n");
         }
         break;
     }
@@ -169,27 +218,27 @@ static void codegenBinaryOp(ASTNode *node) {
         } else {
             OUTPUT("ADDS\n");
             if (node->semanticType == TYPE_INT) {
-                OUTPUT("CALL ifj@wrap32\n");
+                OUTPUT("CALL ifj$wrap32\n");
             }
         }
         break;
     case OP_SUB:
         OUTPUT("SUBS\n");
         if (node->semanticType == TYPE_INT) {
-            OUTPUT("CALL ifj@wrap32\n");
+            OUTPUT("CALL ifj$wrap32\n");
         }
         break;
     case OP_MUL:
         OUTPUT("MULS\n");
         if (node->semanticType == TYPE_INT) {
-            OUTPUT("CALL ifj@wrap32\n");
+            OUTPUT("CALL ifj$wrap32\n");
         }
         break;
     case OP_DIV:
         // Int/Int is integer division, anything involving Double is float division
         if (node->semanticType == TYPE_INT) {
             OUTPUT("IDIVS\n");
-            OUTPUT("CALL ifj@wrap32\n");
+            OUTPUT("CALL ifj$wrap32\n");
         } else {
             OUTPUT("DIVS\n");
         }
@@ -441,6 +490,7 @@ static void codegenBuiltinCall(ASTNode *node) {
             break;
         }
     } else if (strcmp(name, "toInt") == 0) {
+        OUTPUT("CALL ifj$clamp32\n");
         OUTPUT("FLOAT2INTS\n");
     } else if (strcmp(name, "strLength") == 0) {
         OUTPUT("POPS %s%s\n", frame, "tmp1s");
@@ -674,6 +724,8 @@ void codegenStart(ASTNode *root) {
     OUTPUT("\n");
 
     codegenSubStrHelper();
+    codegenWrap();
+    codegenClampDouble();
 
     // walk over functions
     ASTNode *nextFunction = root->data.program.functions;
