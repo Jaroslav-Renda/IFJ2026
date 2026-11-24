@@ -7,6 +7,8 @@
 #ifndef PRECSTACK_H
 #define PRECSTACK_H
 
+#include "ast.h"
+#include "symtable.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -35,6 +37,14 @@ typedef enum : uint8_t {
 typedef struct PrecStackElemT {
     PrecStackType type;
     bool isFooCall;
+    ASTNode *node;
+    dataType litType;
+    union {
+        int intVal;
+        double doubleVal;
+        char *stringVal;
+        char *identifier;
+    };
     struct PrecStackElemT *next;
 } PrecStackElem;
 

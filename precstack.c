@@ -7,6 +7,7 @@
 
 #include "precstack.h"
 #include "error.h"
+#include "symtable.h"
 #include <stdlib.h>
 
 bool precInitStack(PrecStack *stack) {
@@ -25,7 +26,7 @@ bool precPush(PrecStack *stack, PrecStackType type) {
         return false;
     }
 
-    PrecStackElem *newEl = (PrecStackElem *)malloc(sizeof(PrecStackElem));
+    PrecStackElem *newEl = (PrecStackElem *)calloc(1, sizeof(PrecStackElem));
     if (newEl == NULL) {
         errorInternal(0, "memory allocation failed");
         return false;
@@ -34,6 +35,9 @@ bool precPush(PrecStack *stack, PrecStackType type) {
     newEl->type = type;
     newEl->isFooCall = false;
     newEl->next = stack->top;
+    newEl->identifier = NULL;
+    newEl->stringVal = NULL;
+    newEl->node = NULL;
     stack->top = newEl;
     return true;
 }
@@ -50,7 +54,7 @@ bool precPushAfterTerminal(PrecStack *stack, PrecStackType type) {
         cur = &(*cur)->next;
     }
 
-    PrecStackElem *newEl = (PrecStackElem *)malloc(sizeof(PrecStackElem));
+    PrecStackElem *newEl = (PrecStackElem *)calloc(1, sizeof(PrecStackElem));
     if (newEl == NULL) {
         errorInternal(0, "memory allocation failed");
         return false;
@@ -76,6 +80,21 @@ bool precPop(PrecStack *stack) {
 
     PrecStackElem *tmp = stack->top;
     stack->top = stack->top->next;
+
+    if (tmp->type == P_STACK_LIT && tmp->litType == TYPE_STRING && tmp->stringVal != NULL) {
+        free(tmp->stringVal);
+        tmp->stringVal = NULL;
+    }
+    if (tmp->type == P_STACK_ID && tmp->identifier != NULL) {
+        free(tmp->identifier);
+        tmp->identifier = NULL;
+    }
+
+    if (tmp->node != NULL) {
+        deleteNode(tmp->node);
+        tmp->node = NULL;
+    }
+
     free(tmp);
     return true;
 }

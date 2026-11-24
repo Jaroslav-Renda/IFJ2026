@@ -6,11 +6,13 @@
  */
 
 #include "precedence.h"
+#include "ast.h"
 #include "error.h"
 #include "lexer.h"
 #include "parser.h"
 #include "precstack.h"
 #include "prectable.h"
+#include "symtable.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -242,6 +244,43 @@ static bool translateTokenToTable(Token *token, precOperators *tableOp, bool isN
     }
 }
 
+static bool translateStackOpToBinOp(PrecStackType stackOp, BinaryOpType *outOp) {
+    switch (stackOp) {
+    case P_STACK_PLS:
+        *outOp = OP_ADD;
+        return true;
+    case P_STACK_MIN:
+        *outOp = OP_SUB;
+        return true;
+    case P_STACK_TIME:
+        *outOp = OP_MUL;
+        return true;
+    case P_STACK_DIV:
+        *outOp = OP_DIV;
+        return true;
+    case P_STACK_EQ:
+        *outOp = OP_EQ;
+        return true;
+    case P_STACK_NEQ:
+        *outOp = OP_NEQ;
+        return true;
+    case P_STACK_LT:
+        *outOp = OP_LT;
+        return true;
+    case P_STACK_GT:
+        *outOp = OP_GT;
+        return true;
+    case P_STACK_LET:
+        *outOp = OP_LTE;
+        return true;
+    case P_STACK_GET:
+        *outOp = OP_GTE;
+        return true;
+    default:
+        return false;
+    }
+}
+
 static bool shift(PrecStack *stack, Token *token, bool isNeg) {
     PrecStackType type;
     if (!translateTokenToStack(token, &type, isNeg)) {
@@ -254,6 +293,34 @@ static bool shift(PrecStack *stack, Token *token, bool isNeg) {
     }
     if (!precPush(stack, type)) {
         return false;
+    }
+
+    switch (stack->top->type) {
+    case P_STACK_ID:
+        stack->top->identifier = token->data.identifier;
+        token->data.identifier = NULL;
+        break;
+    case P_STACK_LIT:
+        switch (token->type) {
+        case TOKEN_INT:
+            stack->top->litType = TYPE_INT;
+            stack->top->intVal = token->data.intVal;
+            break;
+        case TOKEN_DOUBLE:
+            stack->top->litType = TYPE_DOUBLE;
+            stack->top->doubleVal = token->data.doubleVal;
+            break;
+        case TOKEN_STRING:
+            stack->top->litType = TYPE_STRING;
+            stack->top->stringVal = token->data.stringVal;
+            token->data.stringVal = NULL;
+            break;
+        default:
+            break;
+        }
+        break;
+    default:
+        break;
     }
 
     return true;
@@ -273,30 +340,116 @@ static bool shiftNoStop(PrecStack *stack, Token *token, bool isNeg) {
     return true;
 }
 
-static bool reduceNEl(PrecStack *stack, uint32_t count, bool isFooCall) {
-    // TODO construct AST NODES
+static bool reduceNEl(PrecStack *stack, uint32_t count, bool isFooCall, ASTNode *node) {
     for (uint32_t i = 0; i < count; i++) {
         if (!precPop(stack)) {
+            deleteNode(node);
             return false;
         }
     }
 
     if (stack->top == NULL || stack->top->type != P_STACK_STOP) {
         errorParser(0, "missing '<' stop marker on stack");
+        deleteNode(node);
         return false;
     }
     if (!precPop(stack)) {
+        deleteNode(node);
         return false;
     }
 
     if (!precPush(stack, P_STACK_EXP)) {
+        deleteNode(node);
         return false;
     }
 
-    if (isFooCall) {
-        stack->top->isFooCall = true;
-    }
+    stack->top->node = node;
+    stack->top->isFooCall = isFooCall;
     return true;
+}
+
+static bool reduceId(PrecStack *stack) {
+    switch (stack->top->type) {
+    case P_STACK_ID: {
+        ASTNode *tmpNode = createNode(NODE_VAR_REF);
+        if (tmpNode == NULL) {
+            errorInternal(0, "mem allocation for NODE_VAR_REF failed");
+            return false;
+        }
+        tmpNode->data.varRef.name = stack->top->identifier;
+        stack->top->identifier = NULL;
+
+        return reduceNEl(stack, 1, false, tmpNode);
+    }
+    case P_STACK_LIT: {
+        ASTNode *tmpNode = createNode(NODE_LITERAL);
+        if (tmpNode == NULL) {
+            errorInternal(0, "mem allocation for NODE_LITERAL failed");
+            return false;
+        }
+        tmpNode->data.literal.litType = stack->top->litType;
+        if (stack->top->litType == TYPE_STRING) {
+            tmpNode->data.literal.value.strVal = stack->top->stringVal;
+            stack->top->stringVal = NULL;
+        }
+        if (stack->top->litType == TYPE_INT) {
+            tmpNode->data.literal.value.intVal = stack->top->intVal;
+        }
+        if (stack->top->litType == TYPE_DOUBLE) {
+            tmpNode->data.literal.value.doubleVal = stack->top->doubleVal;
+        }
+        return reduceNEl(stack, 1, false, tmpNode);
+    }
+    default:
+        return false;
+    }
+}
+
+static bool reduceExpAfterPar(PrecStackElem *elem, PrecStack *stack) {
+    PrecStackElem *elemPar = elem->next;
+    if (elemPar == NULL || elemPar->type != P_STACK_LPAR) {
+        errorParser(0, "missing '(' matching ')'");
+        return false;
+    }
+
+    PrecStackElem *elemId = elemPar->next;
+    if (elemId == NULL) {
+        errorParser(0, "unexpected end of stack before '('");
+        return false;
+    }
+
+    // E -> id(E)
+    if (elemId->type == P_STACK_ID) {
+        if (elemId->identifier == NULL) {
+            errorParser(0, "the identifier holds no value");
+            return false;
+        }
+        ASTNode *node = createNode(NODE_FUNC_CALL);
+        if (node == NULL) {
+            errorInternal(0, "mem allocation for NODE_FUNC_CALL failed");
+            return false;
+        }
+        node->data.funcCall.funcName = elemId->identifier;
+        elemId->identifier = NULL;
+
+        node->data.funcCall.args = elem->node;
+        elem->node = NULL;
+
+        return reduceNEl(stack, 4, true, node);
+    }
+
+    // E -> (E)
+    if (elemId->type == P_STACK_STOP) {
+        if (elem->node == NULL || elem->node->next != NULL) {
+            errorParser(0, "comma-separated expressions are only allowed as function arguments");
+            return false;
+        }
+        ASTNode *expr = elem->node;
+        elem->node = NULL;
+        return reduceNEl(stack, 3, false, expr);
+    }
+    errorParser(0, "unexpected symbol before '('");
+    return false;
 }
 
 static bool reduceRparStart(PrecStackElem *elem, PrecStack *stack) {
@@ -306,63 +459,102 @@ static bool reduceRparStart(PrecStackElem *elem, PrecStack *stack) {
     }
 
     switch (elem->type) {
-    // E -> id()
-    case P_STACK_LPAR:
+
+    // E -> id() || ()
+    case P_STACK_LPAR: {
         // is empty foo
-        elem = elem->next;
+        elem = elem->next; // element with the id
         if (elem == NULL) {
             errorParser(0, "empty parentheses '()' require a function identifier");
             return false;
         }
-        if (elem->type != P_STACK_ID) {
-            errorParser(0, "expected '(' before expression");
-            return false;
-        }
-        return reduceNEl(stack, 3, true);
-    // E -> (E) | id(E)
-    case P_STACK_EXP:
-        elem = elem->next;
-        if (elem == NULL) {
-            errorParser(0, "precedence analysis error TODO");
-            return false;
-        }
-        if (elem->type != P_STACK_LPAR) {
-            errorParser(0, "precedence analysis error TODO");
-            return false;
-        }
-        elem = elem->next;
-        if (elem == NULL) {
-            errorParser(0, "precedence analysis error TODO");
-            return false;
-        }
-        // E -> id(E)
+
         if (elem->type == P_STACK_ID) {
-            return reduceNEl(stack, 4, true);
+            if (elem->identifier == NULL) {
+                errorParser(0, "identifier is NULL");
+                return false;
+            }
+
+            ASTNode *node = createNode(NODE_FUNC_CALL);
+            if (node == NULL) {
+                errorInternal(0, "mem allocation for NODE_FUNC_CALL failed");
+                return false;
+            }
+            node->data.funcCall.funcName = elem->identifier;
+            node->data.funcCall.args = NULL;
+
+            elem->identifier = NULL;
+            return reduceNEl(stack, 3, true, node);
         }
-        // E -> (E)
-        if (elem->type == P_STACK_STOP) {
-            return reduceNEl(stack, 3, false);
-        }
-        errorParser(0, "precedence analysis error TODO");
+
+        errorParser(0, "unexpected symbol before '()'");
         return false;
+    }
+
+    // E -> (E) | id(E)
+    case P_STACK_EXP: {
+        return reduceExpAfterPar(elem, stack);
+    }
 
     default:
-        errorParser(0, "precedence analysis error TODO");
+        errorParser(0, "unexpected symbol before ')'");
         return false;
     }
 }
 
 static bool reduceExpStart(PrecStackElem *elem, PrecStack *stack) {
     if (elem == NULL) {
-        errorParser(0, "precedence analysis error TODO");
+        errorParser(0, "unexpected end of stack during expression reduction");
         return false;
     }
 
+    // right side of the operator
+    PrecStackElem *rightElem = stack->top;
+
     switch (elem->type) {
     // E -> -E
-    case P_STACK_NEG:
-        return reduceNEl(stack, 2, false);
-    // E -> E op E | E , E
+    case P_STACK_NEG: {
+        if (rightElem->node == NULL || rightElem->node->next != NULL) {
+            errorParser(0, "invalid operand for unary minus");
+            return false;
+        }
+
+        ASTNode *node = createNode(NODE_UNARY_OP);
+        if (node == NULL) {
+            errorInternal(0, "mem allocation for NODE_UNARY_OP failed");
+            return false;
+        }
+        node->data.unaryOp.op = UOP_MINUS;
+        node->data.unaryOp.operand = rightElem->node;
+        rightElem->node = NULL;
+        return reduceNEl(stack, 2, false, node);
+    }
+    // E -> E , E
+    case P_STACK_COM: {
+        PrecStackElem *leftElem = elem->next;
+
+        if (leftElem == NULL || leftElem->type != P_STACK_EXP) {
+            errorParser(0, "missing left expression before ','");
+            return false;
+        }
+
+        if (leftElem->node == NULL || rightElem->node == NULL) {
+            errorParser(0, "missing AST node in argument list reduction");
+            return false;
+        }
+
+        ASTNode *head = leftElem->node;
+        ASTNode *tail = head;
+        while (tail->next != NULL) {
+            tail = tail->next;
+        }
+        tail->next = rightElem->node;
+
+        leftElem->node = NULL;
+        rightElem->node = NULL;
+        return reduceNEl(stack, 3, false, head);
+    }
+    // E -> E op E
     case P_STACK_DIV:
     case P_STACK_TIME:
     case P_STACK_MIN:
@@ -372,17 +564,41 @@ static bool reduceExpStart(PrecStackElem *elem, PrecStack *stack) {
     case P_STACK_GET:
     case P_STACK_GT:
     case P_STACK_EQ:
-    case P_STACK_NEQ:
-    case P_STACK_COM:
-        elem = elem->next;
-        if (elem == NULL || elem->type != P_STACK_EXP) {
-            errorParser(0, "precedence analysis error TODO");
-            // error
+    case P_STACK_NEQ: {
+        PrecStackElem *leftElem = elem->next;
+
+        if (leftElem == NULL || leftElem->type != P_STACK_EXP) {
+            errorParser(0, "missing left operand for binary operator");
             return false;
         }
-        return reduceNEl(stack, 3, false);
+
+        if (leftElem->node == NULL || rightElem->node == NULL || leftElem->node->next != NULL ||
+            rightElem->node->next != NULL) {
+            errorParser(0, "invalid operand for binary operator");
+            return false;
+        }
+
+        BinaryOpType binOp;
+        if (!translateStackOpToBinOp(elem->type, &binOp)) {
+            errorInternal(0, "unknown binary operator on precedence stack");
+            return false;
+        }
+
+        ASTNode *node = createNode(NODE_BIN_OP);
+        if (node == NULL) {
+            errorInternal(0, "mem allocation for NODE_BINARY_OP failed");
+            return false;
+        }
+        node->data.binOp.op = binOp;
+        node->data.binOp.left = leftElem->node;
+        node->data.binOp.right = rightElem->node;
+
+        leftElem->node = NULL;
+        rightElem->node = NULL;
+        return reduceNEl(stack, 3, false, node);
+    }
     default:
-        errorParser(0, "precedence analysis error TODO");
+        errorParser(0, "invalid operator or symbol before expression");
         // error
         return false;
     }
@@ -391,7 +607,7 @@ static bool reduceExpStart(PrecStackElem *elem, PrecStack *stack) {
 static bool reduce(PrecStack *stack) {
     PrecStackElem *elem = stack->top;
     if (elem == NULL) {
-        errorParser(0, "precedence analysis error TODO");
+        errorParser(0, "empty stack during reduction");
         return false;
     }
 
@@ -399,13 +615,13 @@ static bool reduce(PrecStack *stack) {
     // E -> id | literal
     case P_STACK_ID:
     case P_STACK_LIT:
-        return reduceNEl(stack, 1, false);
+        return reduceId(stack);
 
     // E -> -E | E op E | E , E
     case P_STACK_EXP:
         elem = elem->next;
         if (elem == NULL) {
-            errorParser(0, "precedence analysis error TODO");
+            errorParser(0, "unexpected end of stack after expression");
             return false;
         }
         return reduceExpStart(elem, stack);
@@ -414,17 +630,17 @@ static bool reduce(PrecStack *stack) {
     case P_STACK_RPAR:
         elem = elem->next;
         if (elem == NULL) {
-            errorParser(0, "precedence analysis error TODO");
+            errorParser(0, "unexpected end of stack before ')'");
             return false;
         }
         return reduceRparStart(elem, stack);
     default:
-        errorParser(0, "precedence analysis error TODO");
+        errorParser(0, "cannot reduce top of precedence stack");
         return false;
     }
 }
 
-bool finishExpression(PrecStack *stack) {
+bool finishExpression(PrecStack *stack, ASTNode **expr) {
     PrecStackElem *elem = topTerminal(stack);
     if (elem == NULL) {
         return false;
@@ -442,14 +658,24 @@ bool finishExpression(PrecStack *stack) {
     }
 
     if (stack->top == NULL || stack->top->type != P_STACK_EXP) {
-        errorParser(0, "precedence analysis error TODO");
+        errorParser(0, "expression did not reduce to a single E");
         return false;
     }
 
     if (stack->top->next == NULL || stack->top->next->type != P_STACK_END) {
-        errorParser(0, "precedence analysis error TODO");
+        errorParser(0, "extra symbols remaining on precedence stack");
         return false;
     }
+
+    if (stack->top->node == NULL || stack->top->node->next != NULL) {
+        errorParser(0, "unexpected comma expression at top level");
+        return false;
+    }
+
+    // on the stack is only E so the subtree is complete, can link
+    *expr = stack->top->node;
+    stack->top->node = NULL;
+
     return true;
 }
 
@@ -503,7 +729,8 @@ bool resolveToken(Token *token, PrecStack *stack) {
 }
 
 // lookahead token is one token in history
-bool parseExpression(currentToken *cur, lookaheadToken *lat) {
+bool parseExpression(currentToken *cur, lookaheadToken *lat, ASTNode **expr) {
+    *expr = NULL;
     PrecStack stack;
     if (!precInitStack(&stack)) {
         return false;
@@ -515,6 +742,10 @@ bool parseExpression(currentToken *cur, lookaheadToken *lat) {
     // lookahead token will always be nothing or id
     if (lat != NULL && !lat->isEmpty) {
         if (!resolveToken(&lat->token, &stack)) {
+            if (lat->token.type == TOKEN_IDENTIFIER && lat->token.data.identifier != NULL) {
+                free(lat->token.data.identifier);
+                lat->token.data.identifier = NULL;
+            }
             if (!precDeleteStack(&stack)) {
                 return false;
             }
@@ -526,6 +757,7 @@ bool parseExpression(currentToken *cur, lookaheadToken *lat) {
     // parse every other token until the end of expression
     while (!isExpressionEnd(&cur->token)) {
         if (!resolveToken(&cur->token, &stack)) {
+
             if (!precDeleteStack(&stack)) {
                 return false;
             }
@@ -540,8 +772,12 @@ bool parseExpression(currentToken *cur, lookaheadToken *lat) {
         }
     }
 
-    bool result = finishExpression(&stack);
+    // at this point on the stack are either sub trees or expression waiting to be resolved
+    // so we can resolve them and link the final expression to the node
+    bool result = finishExpression(&stack, expr);
     if (!precDeleteStack(&stack)) {
+        deleteNode(*expr);
+        *expr = NULL;
         return false;
     }
 

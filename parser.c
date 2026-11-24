@@ -6,9 +6,13 @@
  */
 
 #include "parser.h"
+#include "ast.h"
 #include "error.h"
 #include "lexer.h"
 #include "precedence.h"
+#include "symtable.h"
+#include <stddef.h>
+#include <stdlib.h>
 #include <string.h>
 
 // helper function for getting next token with lexer error handeling
@@ -54,27 +58,73 @@ static bool isLookaheadExpressionFirst(currentToken *cur) {
     }
 }
 
-bool parseStAfterId(currentToken *cur) {
+bool parseStAfterLPar(currentToken *cur, ASTNode **statement) {
     lookaheadToken lat;
     lat.token = cur->token;
-    lat.isEmpty = true;
+    lat.isEmpty = false;
     if (!nextToken(cur)) {
         return false;
     }
 
-    if (cur->token.type == TOKEN_EQUAL_SIGN) {
+    // is ()
+    if (cur->token.type == TOKEN_RIGHT_BRACKET) {
+        lat.isEmpty = true;
         if (!nextToken(cur)) {
             return false;
         }
 
-        return parseExpression(cur, NULL);
+        ASTNode *node = createNode(NODE_LITERAL);
+        if (node == NULL) {
+            errorInternal(cur->token.line, "mem allocation failed");
+            return false;
+        }
+        node->data.literal.litType = TYPE_UNIT;
+        *statement = node;
+        return true;
+    }
+
+    // not () -> expression (E)
+    if (!parseExpression(cur, &lat, statement)) {
+        return false;
+    }
+    return expectToken(cur, TOKEN_EOL, "expected EOL after expression");
+}
+
+bool parseStAfterId(currentToken *cur, ASTNode **statement) {
+    // lookahead token holds id
+    lookaheadToken lat;
+    lat.token = cur->token;
+    lat.isEmpty = true;
+    if (!nextToken(cur)) {
+        free(lat.token.data.identifier);
+        return false;
+    }
+
+    // assignment
+    if (cur->token.type == TOKEN_EQUAL_SIGN) {
+        if (!nextToken(cur)) {
+            free(lat.token.data.identifier);
+            return false;
+        }
+
+        ASTNode *tmpAssignNode = createNode(NODE_ASSIGN);
+        if (tmpAssignNode == NULL) {
+            free(lat.token.data.identifier);
+            errorInternal(cur->token.line, "mem allocation for NODE_ASSIGN failed");
+            return false;
+        }
+        tmpAssignNode->data.assign.targetName = lat.token.data.identifier;
+        *statement = tmpAssignNode;
+
+        return parseExpression(cur, NULL, &tmpAssignNode->data.assign.expr);
     }
 
     if (isLookaheadExpressionFirst(cur)) {
         lat.isEmpty = false;
-        return parseExpression(cur, &lat);
+        return parseExpression(cur, &lat, statement);
     }
 
+    free(lat.token.data.identifier);
     errorParser(cur->token.line, "Syntax error: unexpected token after identificator in statement");
     return false;
 }
@@ -119,13 +169,20 @@ static bool isFirstStat(currentToken *cur) {
     return false;
 }
 
-bool parseType(currentToken *cur) {
+bool parseType(currentToken *cur, dataType *type) {
     if (cur->token.type == TOKEN_KEYWORD) {
         switch (cur->token.data.keywordVal) {
         case KEYWORD_UNIT:
+            *type = TYPE_UNIT;
+            return nextToken(cur);
         case KEYWORD_STRING:
+            *type = TYPE_STRING;
+            return nextToken(cur);
         case KEYWORD_INT:
+            *type = TYPE_INT;
+            return nextToken(cur);
         case KEYWORD_DOUBLE:
+            *type = TYPE_DOUBLE;
             return nextToken(cur);
         default:
             break;
@@ -136,15 +193,16 @@ bool parseType(currentToken *cur) {
     return false;
 }
 
-bool parseRetVal(currentToken *cur) {
+bool parseRetVal(currentToken *cur, ASTNode **expr) {
     // return can be empty and have eol or ';' after it
     if (cur->token.type == TOKEN_SEMICOLON || cur->token.type == TOKEN_EOL) {
+        *expr = NULL;
         return true;
     }
 
     // parse return expressioin
     if (isFirstExp(cur)) {
-        return parseExpression(cur, NULL);
+        return parseExpression(cur, NULL, expr);
     }
 
     errorParser(
@@ -152,13 +210,22 @@ bool parseRetVal(currentToken *cur) {
     return false;
 }
 
-static bool parseWhile(currentToken *cur) {
+static bool parseWhile(currentToken *cur, ASTNode **statement) {
     if (!nextToken(cur)) {
         return false;
     };
 
+    ASTNode *tmpWhile = createNode(NODE_WHILE);
+    if (tmpWhile == NULL) {
+        errorInternal(cur->token.line, "mem allocation for NODE_WHILE failed");
+        return false;
+    }
+    tmpWhile->data.whileStmt.condition = NULL;
+    tmpWhile->data.whileStmt.bodyBlock = NULL;
+    *statement = tmpWhile;
+
     // parse condition
-    if (!parseExpression(cur, NULL)) {
+    if (!parseExpression(cur, NULL, &tmpWhile->data.whileStmt.condition)) {
         return false;
     }
 
@@ -170,20 +237,30 @@ static bool parseWhile(currentToken *cur) {
     }
 
     // parse do block
-    if (!parseBlock(cur)) {
+    if (!parseBlock(cur, &tmpWhile->data.whileStmt.bodyBlock)) {
         return false;
     }
 
     return true;
 }
 
-static bool parseIf(currentToken *cur) {
+static bool parseIf(currentToken *cur, ASTNode **statement) {
     if (!nextToken(cur)) {
         return false;
     };
 
+    ASTNode *tmpIfNode = createNode(NODE_IF);
+    if (tmpIfNode == NULL) {
+        errorInternal(cur->token.line, "mem allocation for NODE_IF failed");
+        return false;
+    }
+    tmpIfNode->data.ifStmt.condition = NULL;
+    tmpIfNode->data.ifStmt.thenBlock = NULL;
+    tmpIfNode->data.ifStmt.elseBlock = NULL;
+    *statement = tmpIfNode;
+
     // parse condition
-    if (!parseExpression(cur, NULL)) {
+    if (!parseExpression(cur, NULL, &tmpIfNode->data.ifStmt.condition)) {
         return false;
     }
 
@@ -195,7 +272,7 @@ static bool parseIf(currentToken *cur) {
     }
 
     // parse if block
-    if (!parseBlock(cur)) {
+    if (!parseBlock(cur, &tmpIfNode->data.ifStmt.thenBlock)) {
         return false;
     }
 
@@ -207,34 +284,49 @@ static bool parseIf(currentToken *cur) {
     }
 
     // parse else block
-    if (!parseBlock(cur)) {
+    if (!parseBlock(cur, &tmpIfNode->data.ifStmt.elseBlock)) {
         return false;
     }
 
     return true;
 }
 
-bool parseBlockStat(currentToken *cur) {
+bool parseBlockStat(currentToken *cur, ASTNode **statement) {
     // parse if
     if (cur->token.type == TOKEN_KEYWORD && cur->token.data.keywordVal == KEYWORD_IF) {
-        return parseIf(cur);
+        return parseIf(cur, statement);
     }
 
     // parse while
     if (cur->token.type == TOKEN_KEYWORD && cur->token.data.keywordVal == KEYWORD_WHILE) {
-        return parseWhile(cur);
+        return parseWhile(cur, statement);
     }
 
     errorParser(cur->token.line, "Syntax error: expected 'if' or 'while' statement");
     return false;
 }
 
-static bool parseVariableDec(currentToken *cur) {
-    if (!expectToken(cur, TOKEN_IDENTIFIER, "Syntax error: missing variable identifier")) {
+static bool parseVariableDec(currentToken *cur, bool isMutable, ASTNode **statement) {
+    if (cur->token.type != TOKEN_IDENTIFIER) {
+        errorParser(cur->token.line, "Syntax error: missing variable identifier");
         return false;
     }
 
-    if (!parseOptType(cur)) {
+    ASTNode *tmpVarNode = createNode(NODE_VAR_DECL);
+    if (tmpVarNode == NULL) {
+        errorInternal(cur->token.line, "mem allocation for NODE_VAR_DECL failed");
+        return false;
+    }
+    tmpVarNode->data.varDecl.name = cur->token.data.identifier;
+    tmpVarNode->data.varDecl.isMutable = isMutable;
+    tmpVarNode->data.varDecl.varType = TYPE_UNKNOWN;
+    *statement = tmpVarNode;
+
+    if (!nextToken(cur)) {
+        return false;
+    }
+
+    if (!parseOptType(cur, &tmpVarNode->data.varDecl.varType)) {
         return false;
     }
 
@@ -242,39 +334,50 @@ static bool parseVariableDec(currentToken *cur) {
         return false;
     }
 
-    return parseExpression(cur, NULL);
+    return parseExpression(cur, NULL, &tmpVarNode->data.varDecl.initExpr);
 }
 
-bool parseStat(currentToken *cur) {
+bool parseStat(currentToken *cur, ASTNode **statement) {
     // parse val declaration
     if (cur->token.type == TOKEN_KEYWORD && cur->token.data.keywordVal == KEYWORD_VAL) {
-        return (nextToken(cur) && parseVariableDec(cur));
+        return (nextToken(cur) && parseVariableDec(cur, false, statement));
     }
 
     // parse var declaration
     if (cur->token.type == TOKEN_KEYWORD && cur->token.data.keywordVal == KEYWORD_VAR) {
-        return (nextToken(cur) && parseVariableDec(cur));
+        return (nextToken(cur) && parseVariableDec(cur, true, statement));
     }
 
     // parse return
     if (cur->token.type == TOKEN_KEYWORD && cur->token.data.keywordVal == KEYWORD_RETURN) {
-        return (nextToken(cur) && parseRetVal(cur));
+        ASTNode *tmpReturnNode = createNode(NODE_RETURN);
+        if (tmpReturnNode == NULL) {
+            errorInternal(cur->token.line, "mem allocation for NODE_RETURN failed");
+            return false;
+        }
+        *statement = tmpReturnNode;
+
+        return (nextToken(cur) && parseRetVal(cur, &tmpReturnNode->data.returnStmt.expr));
     }
 
     // parse expression
     if (cur->token.type == TOKEN_IDENTIFIER) {
-        return parseStAfterId(cur);
+        return parseStAfterId(cur, statement);
+    }
+
+    if (cur->token.type == TOKEN_LEFT_BRACKET) {
+        return parseStAfterLPar(cur, statement);
     }
 
     if (isFirstExp(cur)) {
-        return parseExpression(cur, NULL);
+        return parseExpression(cur, NULL, statement);
     }
 
     errorParser(cur->token.line, "Syntax error: expected 'val', 'var', 'return', or an expression");
     return false;
 }
 
-bool parseStRest(currentToken *cur) {
+bool parseStRest(currentToken *cur, ASTNode **nextStatement) {
     // got indentation after statement
     if (cur->token.type == TOKEN_DEDENT) {
         return true;
@@ -282,23 +385,23 @@ bool parseStRest(currentToken *cur) {
 
     // parse another statement
     if (isFirstStat(cur)) {
-        return (parseStat(cur) && parseStNext(cur));
+        return (parseStat(cur, nextStatement) && parseStNext(cur, &(*nextStatement)->next));
     }
 
     // parse another block statement
     if (isFirstBlockStat(cur)) {
-        return (parseBlockStat(cur) && parseStRest(cur));
+        return (parseBlockStat(cur, nextStatement) && parseStRest(cur, &(*nextStatement)->next));
     }
 
     errorParser(cur->token.line, "Syntax error: expected next statement or block dedent");
     return false;
 }
 
-bool parseStNext(currentToken *cur) {
+bool parseStNext(currentToken *cur, ASTNode **nextStatement) {
     // statement ends with EOL
     if (cur->token.type == TOKEN_EOL) {
         // parse another statement after a EOL
-        return (nextToken(cur) && parseStRest(cur));
+        return (nextToken(cur) && parseStRest(cur, nextStatement));
     }
 
     // statement ends with semicolon
@@ -312,36 +415,42 @@ bool parseStNext(currentToken *cur) {
         }
 
         // parse another statement after a ';'
-        return parseStRest(cur);
+        return parseStRest(cur, nextStatement);
     }
 
     errorParser(cur->token.line, "Syntax error: missing EOL or ';' after statement");
     return false;
 }
 
-bool parseStList(currentToken *cur) {
+bool parseStList(currentToken *cur, ASTNode **statement) {
     // parse normal statements
     if (isFirstStat(cur)) {
-        return (parseStat(cur) && parseStNext(cur));
+        return (parseStat(cur, statement) && parseStNext(cur, &(*statement)->next));
     }
 
     // parse block statements (loops and conditions)
     if (isFirstBlockStat(cur)) {
-        return (parseBlockStat(cur) && parseStRest(cur));
+        return (parseBlockStat(cur, statement) && parseStRest(cur, &(*statement)->next));
     }
 
     errorParser(cur->token.line, "Syntax error: block must contain at least one valid statement");
     return false;
 }
 
-bool parseBlock(currentToken *cur) {
+bool parseBlock(currentToken *cur, ASTNode **block) {
     if (!expectToken(
             cur, TOKEN_INDENT, "Syntax error: expected indentation at the start of block")) {
         return false;
     }
 
+    ASTNode *tmpBlockNode = createNode(NODE_BLOCK);
+    if (tmpBlockNode == NULL) {
+        errorInternal(cur->token.line, "mem allocation for NODE_BLOCK failed");
+        return false;
+    }
+    *block = tmpBlockNode;
     // parse all the statements in the block
-    if (!parseStList(cur)) {
+    if (!parseStList(cur, &tmpBlockNode->data.block.firstStmt)) {
         return false;
     }
 
@@ -352,15 +461,15 @@ bool parseBlock(currentToken *cur) {
     return true;
 }
 
-bool parseFooBody(currentToken *cur) {
+bool parseFooBody(currentToken *cur, ASTNode **fooBody) {
     // parse function with a block body
     if (cur->token.type == TOKEN_EOL) {
-        return (nextToken(cur) && parseBlock(cur));
+        return (nextToken(cur) && parseBlock(cur, fooBody));
     }
 
     // parse one line function
     if (isFirstExp(cur)) {
-        if (!parseExpression(cur, NULL)) {
+        if (!parseExpression(cur, NULL, fooBody)) {
             return false;
         };
         return expectToken(
@@ -372,14 +481,15 @@ bool parseFooBody(currentToken *cur) {
     return false;
 }
 
-bool parseOptType(currentToken *cur) {
+bool parseOptType(currentToken *cur, dataType *type) {
     // there is a type
     if (cur->token.type == TOKEN_COLON) {
-        return (nextToken(cur) && parseType(cur));
+        return (nextToken(cur) && parseType(cur, type));
     }
 
     // there is not a type
     if (cur->token.type == TOKEN_EQUAL_SIGN) {
+        *type = TYPE_UNKNOWN;
         return true;
     }
 
@@ -387,9 +497,17 @@ bool parseOptType(currentToken *cur) {
     return false;
 }
 
-bool parseAfterCom(currentToken *cur) {
+bool parseAfterCom(currentToken *cur, ASTNode **nextParam) {
     // parse next parameter
     if (cur->token.type == TOKEN_IDENTIFIER) {
+        ASTNode *paramNode = createNode(NODE_PARAM);
+        if (paramNode == NULL) {
+            errorInternal(cur->token.line, "mem allocation for NODE_PARAM failed");
+            return false;
+        }
+        paramNode->data.param.name = cur->token.data.identifier;
+        *nextParam = paramNode;
+
         if (!nextToken(cur)) {
             return false;
         }
@@ -405,7 +523,7 @@ bool parseAfterCom(currentToken *cur) {
         if (!parseOptEol(cur)) {
             return false;
         }
-        if (!parseType(cur)) {
+        if (!parseType(cur, &paramNode->data.param.type)) {
             return false;
         }
         if (!parseOptEol(cur)) {
@@ -413,28 +531,29 @@ bool parseAfterCom(currentToken *cur) {
         }
 
         // parse next parameter
-        return parseNextParam(cur);
+        return parseNextParam(cur, &paramNode->next);
     }
 
     // parse EOL in parameters
     if (cur->token.type == TOKEN_EOL) {
-        return (nextToken(cur) && parseParams(cur));
+        return (nextToken(cur) && parseParams(cur, nextParam));
     }
 
     errorParser(cur->token.line, "Syntax error: expected parameter identifier or EOL after ','");
     return false;
 }
 
-bool parseNextParam(currentToken *cur) {
+bool parseNextParam(currentToken *cur, ASTNode **nextParam) {
 
     // no more parameters
     if (cur->token.type == TOKEN_RIGHT_BRACKET) {
+        *nextParam = NULL;
         return true;
     }
 
     // parse comma
     if (cur->token.type == TOKEN_COMMA) {
-        return (nextToken(cur) && parseAfterCom(cur));
+        return (nextToken(cur) && parseAfterCom(cur, nextParam));
     }
 
     errorParser(cur->token.line,
@@ -442,9 +561,17 @@ bool parseNextParam(currentToken *cur) {
     return false;
 }
 
-bool parseParams(currentToken *cur) {
+bool parseParams(currentToken *cur, ASTNode **fooParams) {
     // parse parameter
     if (cur->token.type == TOKEN_IDENTIFIER) {
+        ASTNode *paramNode = createNode(NODE_PARAM);
+        if (paramNode == NULL) {
+            errorInternal(cur->token.line, "mem allocation for NODE_PARAM failed");
+            return false;
+        }
+        paramNode->data.param.name = cur->token.data.identifier;
+        *fooParams = paramNode;
+
         if (!nextToken(cur)) {
             return false;
         }
@@ -460,7 +587,7 @@ bool parseParams(currentToken *cur) {
         if (!parseOptEol(cur)) {
             return false;
         }
-        if (!parseType(cur)) {
+        if (!parseType(cur, &paramNode->data.param.type)) {
             return false;
         }
         if (!parseOptEol(cur)) {
@@ -468,11 +595,12 @@ bool parseParams(currentToken *cur) {
         }
 
         // parse next parameter
-        return parseNextParam(cur);
+        return parseNextParam(cur, &paramNode->next);
     }
 
     // no more parameters
     if (cur->token.type == TOKEN_RIGHT_BRACKET) {
+        *fooParams = NULL;
         return true;
     }
 
@@ -530,7 +658,7 @@ bool parseOptEol(currentToken *cur) {
     return false;
 }
 
-static bool parseMainFoo(currentToken *cur) {
+static bool parseMainFoo(currentToken *cur, ASTNode **function) {
     // parse optional eol
     if (!parseOptEol(cur)) {
         return false;
@@ -540,9 +668,26 @@ static bool parseMainFoo(currentToken *cur) {
             cur, KEYWORD_DEF, "Syntax error: missing keyword 'def' in main function declaration")) {
         return false;
     }
-    if (!expectToken(cur, TOKEN_IDENTIFIER, "Syntax error: missing function identifier")) {
+
+    if (cur->token.type != TOKEN_IDENTIFIER) {
+        errorParser(cur->token.line, "Syntax error: missing function identifier");
         return false;
     }
+
+    ASTNode *tmpFooNode = createNode(NODE_FUNC_DEF);
+    if (tmpFooNode == NULL) {
+        errorInternal(cur->token.line, "mem allocation for NODE_FUNC_DEF failed");
+        return false;
+    }
+    tmpFooNode->data.funcDef.isMain = true;
+    tmpFooNode->data.funcDef.name = cur->token.data.identifier;
+    tmpFooNode->data.funcDef.returnType = TYPE_UNKNOWN;
+    *function = tmpFooNode;
+
+    if (!nextToken(cur)) {
+        return false;
+    }
+
     if (!expectToken(
             cur, TOKEN_LEFT_BRACKET, "Syntax error: missing '(' after function identifier")) {
         return false;
@@ -553,7 +698,7 @@ static bool parseMainFoo(currentToken *cur) {
         return false;
     }
     // parse function parameters
-    if (!parseParams(cur)) {
+    if (!parseParams(cur, &tmpFooNode->data.funcDef.params)) {
         return false;
     }
 
@@ -562,7 +707,7 @@ static bool parseMainFoo(currentToken *cur) {
     }
 
     // parse optional return type assignment
-    if (!parseOptType(cur)) {
+    if (!parseOptType(cur, &tmpFooNode->data.funcDef.returnType)) {
         return false;
     }
 
@@ -571,17 +716,33 @@ static bool parseMainFoo(currentToken *cur) {
     }
 
     // parse function body
-    if (!parseFooBody(cur)) {
+    if (!parseFooBody(cur, &tmpFooNode->data.funcDef.body)) {
         return false;
     }
 
     return true;
 }
 
-static bool parseFoo(currentToken *cur) {
-    if (!expectToken(cur, TOKEN_IDENTIFIER, "Syntax error: missing function identifier")) {
+static bool parseFoo(currentToken *cur, ASTNode **function) {
+    if (cur->token.type != TOKEN_IDENTIFIER) {
+        errorParser(cur->token.line, "Syntax error: missing function identifier");
         return false;
     }
+
+    ASTNode *tmpFooNode = createNode(NODE_FUNC_DEF);
+    if (tmpFooNode == NULL) {
+        errorInternal(cur->token.line, "mem allocation for NODE_FUNC_DEF failed");
+        return false;
+    }
+    tmpFooNode->data.funcDef.isMain = false;
+    tmpFooNode->data.funcDef.name = cur->token.data.identifier;
+    tmpFooNode->data.funcDef.returnType = TYPE_UNKNOWN;
+    *function = tmpFooNode; // function now points to hte node pointer, so it trackt its changes
+
+    if (!nextToken(cur)) {
+        return false;
+    }
+
     if (!expectToken(
             cur, TOKEN_LEFT_BRACKET, "Syntax error: missing '(' after function identifier")) {
         return false;
@@ -592,7 +753,7 @@ static bool parseFoo(currentToken *cur) {
         return false;
     }
     // parse function parameters
-    if (!parseParams(cur)) {
+    if (!parseParams(cur, &tmpFooNode->data.funcDef.params)) {
         return false;
     }
 
@@ -601,7 +762,7 @@ static bool parseFoo(currentToken *cur) {
     }
 
     // parse optional return type assignment
-    if (!parseOptType(cur)) {
+    if (!parseOptType(cur, &tmpFooNode->data.funcDef.returnType)) {
         return false;
     }
 
@@ -610,39 +771,39 @@ static bool parseFoo(currentToken *cur) {
     }
 
     // parse function body
-    if (!parseFooBody(cur)) {
+    if (!parseFooBody(cur, &tmpFooNode->data.funcDef.body)) {
         return false;
     }
 
     return true;
 }
 
-bool parseFooDec(currentToken *cur) {
+bool parseFooDec(currentToken *cur, ASTNode **function) {
     // parsing regular function
     if (cur->token.type == TOKEN_KEYWORD && cur->token.data.keywordVal == KEYWORD_DEF) {
-        return (nextToken(cur) && parseFoo(cur));
+        return (nextToken(cur) && parseFoo(cur, function));
     }
 
     // parsing main function
     if (cur->token.type == TOKEN_MAIN) {
-        // TODO: mela by syntakticka analyza nastavit nejaky flag na kontrolu vice @main funkci?
-        return (nextToken(cur) && parseMainFoo(cur));
+        return (nextToken(cur) && parseMainFoo(cur, function));
     }
 
     errorParser(cur->token.line, "Syntax error: expected 'def' or '@main' in function declaration");
     return false;
 }
 
-bool parseFooList(currentToken *cur) {
+bool parseFooList(currentToken *cur, ASTNode **function) {
     // parsing function
     if ((cur->token.type == TOKEN_KEYWORD && cur->token.data.keywordVal == KEYWORD_DEF) ||
         (cur->token.type == TOKEN_MAIN)) {
         // parse function declaration and another function
-        return (parseFooDec(cur) && parseFooList(cur));
+        return (parseFooDec(cur, function) && parseFooList(cur, &(*function)->next));
     }
 
     // no more functions
     if (cur->token.type == TOKEN_EOF) {
+        *function = NULL;
         return true;
     }
 
@@ -650,7 +811,7 @@ bool parseFooList(currentToken *cur) {
     return false;
 }
 
-bool parseProg(currentToken *cur) {
+bool parseProg(currentToken *cur, ASTNode *program) {
     if (!nextToken(cur)) {
         return false;
     }
@@ -664,6 +825,11 @@ bool parseProg(currentToken *cur) {
             "Syntax error: expected package name 'ifj26' after 'import' in prolog");
         return false;
     }
+
+    // free the prolog id
+    free(cur->token.data.identifier);
+    cur->token.data.identifier = NULL;
+
     if (!nextToken(cur)) {
         return false;
     }
@@ -680,7 +846,7 @@ bool parseProg(currentToken *cur) {
     }
 
     // parse all the functions in the program
-    if (!parseFooList(cur)) {
+    if (!parseFooList(cur, &program->data.program.functions)) {
         return false;
     }
 
@@ -689,6 +855,13 @@ bool parseProg(currentToken *cur) {
         errorParser(cur->token.line, "Syntax error: expected EOF at the end of program");
         return false;
     }
+
+    // count all program functions
+    size_t fooCount = 0;
+    for (ASTNode *foo = program->data.program.functions; foo != NULL; foo = foo->next) {
+        fooCount++;
+    }
+    program->data.program.funcCount = fooCount;
 
     return true;
 }
