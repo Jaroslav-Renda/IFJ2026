@@ -448,6 +448,10 @@ static void codegenBuiltinCall(ASTNode *node) {
         OUTPUT("READ %s%s int\n", frame, "tmp1s");
         OUTPUT("TYPE %s%s %s%s\n", frame, "tmp2s", frame, "tmp1s");
         OUTPUT("JUMPIFEQ %s %s%s string@nil\n", label, frame, "tmp2s");
+        OUTPUT("GT %s%s %s%s int@2147483647\n", frame, "tmp2s", frame, "tmp1s");
+        OUTPUT("JUMPIFEQ %s %s%s bool@true\n", label, frame, "tmp2s");
+        OUTPUT("LT %s%s %s%s int@-2147483648\n", frame, "tmp2s", frame, "tmp1s");
+        OUTPUT("JUMPIFEQ %s %s%s bool@true\n", label, frame, "tmp2s");
         OUTPUT("PUSHS %s%s\n", frame, "tmp1s");
         OUTPUT("JUMP %s\n", labelDone);
         OUTPUT("LABEL %s\n", label);
