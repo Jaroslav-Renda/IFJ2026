@@ -47,6 +47,9 @@ void symtableFree(Symtable *table) {
         if (table->items[i].key != NULL && table->items[i].kind == SYM_FUNC) {
             free(table->items[i].data.func.params);
         }
+        if (table->items[i].mangledName != NULL) {
+            free(table->items[i].mangledName);
+        }
         free(table->items[i].key);
     }
     free(table->items);
