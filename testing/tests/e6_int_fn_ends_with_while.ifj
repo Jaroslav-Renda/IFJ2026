@@ -1,0 +1,7 @@
+import ifj26.*
+def f(n: Int): Int =
+  var i = n
+  while i > 0 do
+    i = i - 1
+@main def m(): Unit =
+  print(1)

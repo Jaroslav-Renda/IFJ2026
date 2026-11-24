@@ -1,0 +1,11 @@
+import ifj26.*
+@main def main(): Unit =
+    val flag = 1
+    if flag == 1 then
+        val secret = 42
+        print(secret)
+    else
+        val secret = 99
+        print(secret)
+    print(secret)
+

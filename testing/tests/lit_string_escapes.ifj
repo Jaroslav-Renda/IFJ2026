@@ -1,0 +1,8 @@
+import ifj26.*
+
+@main def m(): Unit =
+  print("a\tb\\c\"d\n")
+  print("hash # and spaces  x\n")
+  print("cr\rX\n")
+  print("")
+  print("end\n")

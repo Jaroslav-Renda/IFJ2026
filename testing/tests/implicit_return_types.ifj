@@ -1,0 +1,18 @@
+import ifj26.*
+
+def five() = 5
+def name() = "n"
+def dbl() = 1.5
+def nothing() =
+  print("x")
+
+@main def m(): Unit =
+  val a = five()
+  val b = name()
+  val c = dbl()
+  val d = nothing()
+  print(a)
+  print(b)
+  print(c)
+  print(d)
+  print("\n")

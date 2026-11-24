@@ -1,0 +1,16 @@
+import ifj26.*
+@main def m(): Unit =
+  val i = 2
+  val d = 2.0
+  if i == d then
+    print("eq ")
+  else
+    print("ne ")
+  if i != 2.5 then
+    print("ne ")
+  else
+    print("eq ")
+  if 3 >= d then
+    print("ge\n")
+  else
+    print("lt\n")

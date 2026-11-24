@@ -1,0 +1,9 @@
+import ifj26.*
+@main def m(): Unit =
+  var i = 0
+  while i < 5 do
+    val d = readDouble()
+    print(toStr(d))
+    print(" ")
+    i = i + 1
+  print("\n")

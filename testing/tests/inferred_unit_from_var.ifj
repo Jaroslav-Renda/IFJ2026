@@ -1,0 +1,14 @@
+import ifj26.*
+def f() =
+  var x = 1
+def g() =
+  if 1 < 2 then
+    print("a")
+  else
+    print("b")
+@main def m(): Unit =
+  val u = f()
+  print(u)
+  val v = g()
+  print(v)
+  print("\n")

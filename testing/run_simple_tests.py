@@ -1,22 +1,31 @@
 #!/usr/bin/env python3
 """
-Runner for the simple IFJ2026 integration tests stored in SCALACODE
-(designed to be invoked directly via Makefile: `make test`).
+Runner for the IFJ2026 integration tests (designed to be invoked directly
+via Makefile: `make test`).
 
-Parses numbered test blocks (`1:`, `2:`, ..., `9:`) from SCALACODE,
-runs ./compiler on each block, checks expected compiler return codes
+Every test lives in testing/tests as <name>.ifj plus:
+  <name>.rc      expected result, one line:
+                   c:N   compiler must exit with N (N may be "a|b" for alternatives),
+                         the interpreter is not run
+                   r:N   compiler must exit 0, interpreter must exit with N
+  <name>.stdout  expected interpreter stdout, byte-exact (checked when r:0)
+  <name>.in      optional interpreter stdin
+
+Each test runs ./compiler, checks the expected compiler return code
 (for semantic/syntax/lex errors) or executes the generated IFJcode26
-in ./ic26int-linux-x86_64 and verifies stdout.
+in ./ic26int-linux-x86_64 and verifies the return code and stdout.
+Failed tests print the expected and actual results and a diff of stdout.
 
 Usage:
     python3 run_simple_tests.py
-    python3 run_simple_tests.py --source testing/SCALACODE --verbose
+    python3 run_simple_tests.py --verbose
+    python3 run_simple_tests.py --only read_int,unit_values
     python3 run_simple_tests.py --valgrind
     python3 run_simple_tests.py --save-logs testing
 """
 
 import argparse
-import math
+import difflib
 import os
 import re
 import shutil
@@ -24,7 +33,7 @@ import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple, Union
+from typing import List, Optional, Tuple
 
 GREEN = "\033[32m"
 RED = "\033[31m"
@@ -35,105 +44,67 @@ RESET = "\033[0m"
 
 
 @dataclass
-class ExpectedSpec:
+class TestCase:
     name: str
-    expected_rc: int = 0
-    expected_stdout: Optional[Union[str, Tuple[str, ...]]] = None
-    stdin_data: str = ""
+    code: bytes
+    # accepted compiler return codes
+    expected_rc: Tuple[int, ...] = (0,)
+    # interpreter return code; None = compile only, do not run the interpreter
+    expected_int_rc: Optional[int] = 0
+    # byte-exact expected stdout; None = not checked
+    expected_stdout: Optional[bytes] = None
+    stdin_data: bytes = b""
+    # set when the .rc file is malformed
+    error: str = ""
 
 
-# Expected results matching testing/RESULTS.txt (tests 1-9).
-# Edit or add entries here whenever you append new numbered tests to SCALACODE.
-EXPECTED: Dict[int, ExpectedSpec] = {
-    1: ExpectedSpec(
-        name="Aritmetika a unarni minus (Int + Double)",
-        expected_rc=0,
-        expected_stdout="16 -0x1.ep+2",
-    ),
-    2: ExpectedSpec(
-        name="Test 2 (120)",
-        expected_rc=0,
-        expected_stdout="120",
-    ),
-    3: ExpectedSpec(
-        name="Test 3 (15 100)",
-        expected_rc=0,
-        expected_stdout=("15 100", "15, 100"),
-    ),
-    4: ExpectedSpec(
-        name="Retezce a vestavene funkce",
-        expected_rc=0,
-        expected_stdout="IFJ2026 7 IFJ 73 A",
-    ),
-    5: ExpectedSpec(
-        name="Vstup ze stdin (a - b)",
-        expected_rc=0,
-        expected_stdout="3",
-        stdin_data="10\n7\n",
-    ),
-    6: ExpectedSpec(
-        name="Komplexni vypocet",
-        expected_rc=0,
-        expected_stdout="6 21 125 777 16 673",
-    ),
-    7: ExpectedSpec(
-        name="Semanticka chyba 3 (nedeklarovana promenna)",
-        expected_rc=3,
-    ),
-    8: ExpectedSpec(
-        name="Semanticka chyba 6 (vzajemna rekurze bez typu)",
-        expected_rc=6,
-    ),
-    9: ExpectedSpec(
-        name="Semanticka chyba 7 (zmena val)",
-        expected_rc=7,
-    ),
-}
+@dataclass
+class TestResult:
+    ok: bool
+    detail: str
+    ifjcode: str = ""
+    stderr: str = ""
+    vg_issue: str = ""
+    comp_rc: Optional[int] = None
+    int_rc: Optional[int] = None
+    stdout: Optional[bytes] = None
 
 
-def find_source_file(explicit_path: str) -> Optional[str]:
-    if explicit_path:
-        return explicit_path if os.path.isfile(explicit_path) else None
-    candidates = [
-        "testing/SCALACODE",
-        "testing/SCALACODE.txt",
-        "SCALACODE",
-        "SCALACODE.txt",
-    ]
-    for path in candidates:
-        if os.path.isfile(path):
-            return path
-    return None
-
-
-def parse_scalacode(path: str) -> List[Tuple[int, str]]:
-    """Parse numbered test blocks (`1:`, `2:`, ...) from a SCALACODE file."""
-    with open(path, "r", encoding="utf-8") as f:
-        lines = f.readlines()
-
-    tests: List[Tuple[int, str]] = []
-    current_id: Optional[int] = None
-    current_lines: List[str] = []
-
-    header_re = re.compile(r"^\s*(\d+)\s*:\s*$")
-
-    for line in lines:
-        if current_id is None and line.strip().upper() in ("", "SCALACODE", "SCALACODE:"):
+def load_tests(directory: str) -> List[TestCase]:
+    """Load <name>.ifj tests with their .rc/.stdout/.in files from a directory."""
+    tests: List[TestCase] = []
+    for fname in sorted(os.listdir(directory)):
+        if not fname.endswith(".ifj"):
             continue
-        m = header_re.match(line)
-        if m:
-            if current_id is not None:
-                code = "".join(current_lines).strip("\n") + "\n"
-                tests.append((current_id, code))
-            current_id = int(m.group(1))
-            current_lines = []
-        elif current_id is not None:
-            current_lines.append(line)
+        name = fname[: -len(".ifj")]
+        base = os.path.join(directory, name)
 
-    if current_id is not None:
-        code = "".join(current_lines).strip("\n") + "\n"
-        tests.append((current_id, code))
+        def read(ext: str) -> Optional[bytes]:
+            path = base + ext
+            if not os.path.isfile(path):
+                return None
+            with open(path, "rb") as f:
+                return f.read()
 
+        test = TestCase(name=name, code=read(".ifj") or b"")
+        rc_line = (read(".rc") or b"").decode("utf-8").strip()
+        kind, _, value = rc_line.partition(":")
+        try:
+            codes = tuple(int(x) for x in value.split("|"))
+        except ValueError:
+            codes = ()
+
+        if kind == "c" and codes:
+            test.expected_rc = codes
+            test.expected_int_rc = None
+        elif kind == "r" and len(codes) == 1:
+            test.expected_int_rc = codes[0]
+            if codes[0] == 0:
+                test.expected_stdout = read(".stdout") or b""
+            test.stdin_data = read(".in") or b""
+        else:
+            test.error = f"bad .rc file {rc_line!r} (want c:N or r:N)"
+        tests.append(test)
     return tests
 
 
@@ -149,53 +120,72 @@ def check_valgrind_log(log_text: str) -> Tuple[bool, str]:
     return False, f"valgrind errors={errors}, definitely_lost={def_bytes}B, indirectly_lost={ind_bytes}B"
 
 
-def tokens_equivalent(actual: str, expected: str) -> bool:
-    """Exact match, with fallback comparing hex/decimal float tokens numerically."""
-    a_clean = actual.strip()
-    e_clean = expected.strip()
-    if a_clean == e_clean:
-        return True
-
-    a_toks = a_clean.split()
-    e_toks = e_clean.split()
-    if len(a_toks) != len(e_toks):
-        return False
-
-    for at, et in zip(a_toks, e_toks):
-        if at == et:
-            continue
-        try:
-            av = float.fromhex(at) if "0x" in at.lower() else float(at)
-            ev = float.fromhex(et) if "0x" in et.lower() else float(et)
-            if not math.isclose(av, ev, rel_tol=1e-9, abs_tol=1e-12):
-                return False
-        except ValueError:
-            return False
-    return True
+def as_text(data: bytes) -> str:
+    return data.decode("utf-8", errors="replace")
 
 
-def stdout_matches(actual: str, expected: Optional[Union[str, Tuple[str, ...]]]) -> bool:
-    if expected is None:
-        return True
-    if isinstance(expected, tuple):
-        return any(tokens_equivalent(actual, opt) for opt in expected)
-    return tokens_equivalent(actual, expected)
+def visible(data: bytes) -> str:
+    """Show stdout on one line with escapes (\\n, \\t, \\r, trailing spaces visible)."""
+    return repr(as_text(data))
+
+
+def describe_expected(test: TestCase) -> str:
+    rc = "|".join(map(str, test.expected_rc))
+    if test.expected_int_rc is None:
+        return f"compiler rc={rc}"
+    text = f"compiler rc={rc}, interpreter rc={test.expected_int_rc}"
+    if test.expected_stdout is not None:
+        text += f", stdout={visible(test.expected_stdout)}"
+    return text
+
+
+def describe_actual(result: TestResult) -> str:
+    if result.comp_rc is None:
+        return "-"
+    text = f"compiler rc={result.comp_rc}"
+    if result.int_rc is not None:
+        text += f", interpreter rc={result.int_rc}"
+    if result.stdout is not None:
+        text += f", stdout={visible(result.stdout)}"
+    return text
+
+
+def stdout_diff(expected: bytes, actual: bytes) -> List[str]:
+    """Unified line diff of expected vs actual stdout, each line shown with escapes."""
+    exp_lines = [repr(line)[1:-1] for line in as_text(expected).splitlines(keepends=True)]
+    act_lines = [repr(line)[1:-1] for line in as_text(actual).splitlines(keepends=True)]
+    return list(
+        difflib.unified_diff(exp_lines, act_lines, "expected", "actual", n=2, lineterm="")
+    )
+
+
+def colorize_diff(line: str) -> str:
+    if line.startswith(("---", "+++")):
+        return f"{BOLD}{line}{RESET}"
+    if line.startswith("-"):
+        return f"{RED}{line}{RESET}"
+    if line.startswith("+"):
+        return f"{GREEN}{line}{RESET}"
+    if line.startswith("@@"):
+        return f"{CYAN}{line}{RESET}"
+    return line
 
 
 def run_single_test(
-    test_id: int,
-    code: str,
-    spec: ExpectedSpec,
+    test: TestCase,
     compiler_bin: str,
     interp_bin: str,
     use_valgrind: bool,
     timeout: float,
-):
+) -> TestResult:
+    if test.error:
+        return TestResult(False, test.error)
+
     vg_log_path: Optional[str] = None
     vg_issue = ""
 
     if use_valgrind:
-        fd, vg_log_path = tempfile.mkstemp(prefix="ifj26_simple_vg_", suffix=".log")
+        fd, vg_log_path = tempfile.mkstemp(prefix="ifj26_vg_", suffix=".log")
         os.close(fd)
         comp_cmd = [
             "valgrind",
@@ -210,13 +200,11 @@ def run_single_test(
 
     # Step 1: Compile
     try:
-        comp_proc = subprocess.run(
-            comp_cmd, input=code, text=True, capture_output=True, timeout=timeout
-        )
+        comp_proc = subprocess.run(comp_cmd, input=test.code, capture_output=True, timeout=timeout)
     except subprocess.TimeoutExpired:
         if vg_log_path and os.path.exists(vg_log_path):
             os.remove(vg_log_path)
-        return False, "COMPILE TIMEOUT", "", "", "", -999
+        return TestResult(False, "COMPILE TIMEOUT")
 
     vg_ok = True
     if use_valgrind and vg_log_path:
@@ -228,78 +216,75 @@ def run_single_test(
             if os.path.exists(vg_log_path):
                 os.remove(vg_log_path)
 
+    ifjcode_raw = comp_proc.stdout
+    result = TestResult(
+        ok=False,
+        detail="",
+        ifjcode=as_text(ifjcode_raw),
+        stderr=as_text(comp_proc.stderr),
+        vg_issue=vg_issue,
+        comp_rc=comp_proc.returncode,
+    )
     comp_rc = comp_proc.returncode
-    ifjcode = comp_proc.stdout
 
     if not vg_ok:
-        return False, "valgrind error", ifjcode, comp_proc.stderr, vg_issue, comp_rc
+        result.detail = "valgrind error"
+        return result
 
-    if comp_rc != spec.expected_rc:
+    if comp_rc not in test.expected_rc:
         extra = f" [SIGNAL {-comp_rc}]" if comp_rc < 0 else ""
-        return (
-            False,
-            f"compiler rc={comp_rc}{extra} (expected {spec.expected_rc})",
-            ifjcode,
-            comp_proc.stderr,
-            "",
-            comp_rc,
-        )
+        expected = "|".join(map(str, test.expected_rc))
+        result.detail = f"compiler rc={comp_rc}{extra} (expected {expected})"
+        return result
 
-    # For expected compile-time error tests (RC != 0), DO NOT run the interpreter.
-    if spec.expected_rc != 0:
-        return True, f"rc={comp_rc}", f"semERR:{comp_rc}", comp_proc.stderr, "", comp_rc
+    # For compile-only tests (expected compile-time errors), DO NOT run the interpreter.
+    if comp_rc != 0 or test.expected_int_rc is None:
+        result.ok = True
+        result.detail = f"rc={comp_rc}"
+        return result
 
     # Step 2: Execute generated IFJcode26 on interpreter
-    fd, code_path = tempfile.mkstemp(prefix=f"ifj26_t{test_id}_", suffix=".ifjcode")
+    fd, code_path = tempfile.mkstemp(prefix=f"ifj26_{test.name}_", suffix=".ifjcode")
     os.close(fd)
     try:
-        with open(code_path, "w", encoding="utf-8") as f:
-            f.write(ifjcode)
+        with open(code_path, "wb") as f:
+            f.write(ifjcode_raw)
         try:
             int_proc = subprocess.run(
                 [interp_bin, code_path],
-                input=spec.stdin_data,
-                text=True,
+                input=test.stdin_data,
                 capture_output=True,
                 timeout=timeout,
             )
         except subprocess.TimeoutExpired:
-            return False, f"INTERPRETER TIMEOUT after {timeout}s", ifjcode, "", "", comp_rc
+            result.detail = f"INTERPRETER TIMEOUT after {timeout}s"
+            return result
     finally:
         if os.path.exists(code_path):
             os.remove(code_path)
 
-    if int_proc.returncode != 0:
-        return (
-            False,
-            f"interpreter rc={int_proc.returncode} (expected 0)",
-            ifjcode,
-            int_proc.stderr,
-            "",
-            comp_rc,
-        )
+    result.int_rc = int_proc.returncode
+    result.stdout = int_proc.stdout
+    result.stderr = as_text(int_proc.stderr)
 
-    actual_out = int_proc.stdout
-    if not stdout_matches(actual_out, spec.expected_stdout):
-        exp_display = (
-            " / ".join(repr(x) for x in spec.expected_stdout)
-            if isinstance(spec.expected_stdout, tuple)
-            else repr(spec.expected_stdout)
-        )
-        return (
-            False,
-            f"stdout mismatch: expected={exp_display}, got={actual_out!r}",
-            ifjcode,
-            int_proc.stderr,
-            "",
-            comp_rc,
-        )
+    if int_proc.returncode != test.expected_int_rc:
+        result.detail = f"interpreter rc={int_proc.returncode} (expected {test.expected_int_rc})"
+        return result
 
-    return True, actual_out.strip(), ifjcode, int_proc.stderr, "", comp_rc
+    if test.expected_stdout is not None and int_proc.stdout != test.expected_stdout:
+        result.detail = "stdout mismatch"
+        return result
+
+    result.ok = True
+    if test.expected_int_rc != 0:
+        result.detail = f"interpreter rc={test.expected_int_rc}"
+    else:
+        result.detail = visible(int_proc.stdout)
+    return result
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run simple IFJ2026 tests from SCALACODE.")
+    parser = argparse.ArgumentParser(description="Run IFJ2026 integration tests.")
     parser.add_argument("--bin", default="./compiler", help="Path to compiler binary")
     parser.add_argument(
         "--int",
@@ -308,21 +293,21 @@ def main() -> int:
         help="Path to IFJcode26 interpreter",
     )
     parser.add_argument(
-        "--source",
-        default="",
-        help="Path to SCALACODE file (auto-detects testing/SCALACODE by default)",
+        "--tests-dir",
+        default="testing/tests",
+        help="Directory with <name>.ifj/.rc/.stdout/.in tests",
     )
     parser.add_argument("--valgrind", action="store_true", help="Run compiler under Valgrind")
     parser.add_argument("--verbose", action="store_true", help="Show source/stderr on failure")
     parser.add_argument(
         "--only",
         default="",
-        help="Comma-separated test numbers to run (e.g. --only 1,4,7)",
+        help="Comma-separated test names to run (e.g. --only read_int,unit_values)",
     )
     parser.add_argument(
         "--save-logs",
         default="",
-        help="Optional directory to write fresh IFJCODE.txt and RESULTS.txt",
+        help="Optional directory to write fresh IFJCODE.txt, RESULTS.txt and DIFF.txt",
     )
     parser.add_argument("--timeout", type=float, default=5.0, help="Timeout per step (s)")
     args = parser.parse_args()
@@ -336,72 +321,95 @@ def main() -> int:
     if args.valgrind and shutil.which("valgrind") is None:
         print(f"{RED}Error:{RESET} valgrind not found in PATH.")
         return 1
-
-    source_path = find_source_file(args.source)
-    if source_path is None:
-        print(
-            f"{RED}Error:{RESET} SCALACODE file not found. "
-            "Pass it explicitly with --source <path> (e.g. --source testing/SCALACODE)."
-        )
+    if not os.path.isdir(args.tests_dir):
+        print(f"{RED}Error:{RESET} Test directory '{args.tests_dir}' not found.")
         return 1
 
-    parsed_tests = parse_scalacode(source_path)
-    if not parsed_tests:
-        print(f"{RED}Error:{RESET} No numbered test blocks (`1:`, `2:`, ...) found in '{source_path}'.")
+    tests = load_tests(args.tests_dir)
+    if not tests:
+        print(f"{RED}Error:{RESET} No <name>.ifj tests found in '{args.tests_dir}'.")
         return 1
 
     if args.only:
-        wanted = {int(x.strip()) for x in args.only.split(",") if x.strip()}
-        parsed_tests = [(tid, code) for tid, code in parsed_tests if tid in wanted]
-        if not parsed_tests:
+        wanted = {x.strip() for x in args.only.split(",") if x.strip()}
+        tests = [t for t in tests if t.name in wanted]
+        if not tests:
             print(f"{YELLOW}No tests matched --only {args.only}.{RESET}")
             return 1
 
     mode = "VALGRIND + INTERPRETER" if args.valgrind else "INTERPRETER"
     print(f"{BOLD}{'=' * 70}{RESET}")
-    print(f"{BOLD}  IFJ2026 SIMPLE TESTS ({mode}) | Source: {source_path}{RESET}")
+    print(f"{BOLD}  IFJ2026 TESTS ({mode}) | Source: {args.tests_dir}{RESET}")
     print(f"{BOLD}{'=' * 70}{RESET}")
 
     passed = 0
-    failed = 0
+    failed_names: List[str] = []
     ifjcode_log: List[str] = ["IFJCODE:\n"]
     results_log: List[str] = ["RESULTS:\n"]
+    diff_log: List[str] = ["DIFF (failed tests only):\n"]
 
-    for tid, code in parsed_tests:
-        spec = EXPECTED.get(tid, ExpectedSpec(name=f"Test {tid}", expected_rc=0))
-        ok, detail, ifjcode, stderr, vg_issue, comp_rc = run_single_test(
-            tid, code, spec, args.bin, args.interp, args.valgrind, args.timeout
+    for test in tests:
+        res = run_single_test(test, args.bin, args.interp, args.valgrind, args.timeout)
+        expected = describe_expected(test)
+        actual = describe_actual(res)
+        diff: List[str] = []
+        if (
+            not res.ok
+            and test.expected_stdout is not None
+            and res.stdout is not None
+            and res.stdout != test.expected_stdout
+        ):
+            diff = stdout_diff(test.expected_stdout, res.stdout)
+
+        status = "PASS" if res.ok else "FAIL"
+        ifjcode_log.append(f"\n{test.name}:\n{res.ifjcode.rstrip()}\n")
+        results_log.append(
+            f"{status} {test.name}\n    expected: {expected}\n    actual:   {actual}\n"
         )
 
-        ifjcode_log.append(f"\n{tid}:\n{ifjcode.rstrip()}\n")
-        if comp_rc != 0:
-            results_log.append(f"{tid}:err:{comp_rc}\n")
-        else:
-            results_log.append(f"{tid}:{detail}\n")
-
-        if ok:
+        if res.ok:
             passed += 1
-            print(f"{GREEN}[PASS]{RESET} Test {tid}: {spec.name} -> {CYAN}{detail}{RESET}")
-        else:
-            failed += 1
-            print(f"{RED}[FAIL]{RESET} Test {tid}: {spec.name} -> {detail}")
-            if stderr.strip():
-                print(f"       {YELLOW}stderr:{RESET} {stderr.strip()}")
-            if vg_issue:
-                print(f"       {RED}valgrind:{RESET} {vg_issue}")
-            if args.verbose:
-                print(f"       {BOLD}--- source (Test {tid}) ---{RESET}")
-                for line_no, line in enumerate(code.splitlines(), 1):
-                    print(f"       {line_no:2d} | {line}")
+            print(f"{GREEN}[PASS]{RESET} {test.name} -> {CYAN}{res.detail}{RESET}")
+            continue
+
+        failed_names.append(test.name)
+        print(f"{RED}[FAIL]{RESET} {test.name} -> {res.detail}")
+        print(f"       {BOLD}expected:{RESET} {expected}")
+        print(f"       {BOLD}actual:{RESET}   {actual}")
+        for line in diff:
+            print(f"       {colorize_diff(line)}")
+        stderr = res.stderr.strip().replace("\n", "\n               ")
+        if stderr:
+            print(f"       {YELLOW}stderr:{RESET} {stderr}")
+        if res.vg_issue:
+            print(f"       {RED}valgrind:{RESET} {res.vg_issue}")
+        if args.verbose:
+            print(f"       {BOLD}--- source ({test.name}) ---{RESET}")
+            for line_no, line in enumerate(as_text(test.code).splitlines(), 1):
+                print(f"       {line_no:2d} | {line}")
+
+        diff_log.append(
+            f"\n{test.name}: {res.detail}\n    expected: {expected}\n    actual:   {actual}\n"
+        )
+        diff_log.extend(f"    {line}\n" for line in diff)
+        if stderr:
+            diff_log.append(f"    stderr: {stderr}\n")
 
     if args.save_logs:
         os.makedirs(args.save_logs, exist_ok=True)
-        with open(os.path.join(args.save_logs, "IFJCODE.txt"), "w", encoding="utf-8") as f:
-            f.writelines(ifjcode_log)
-        with open(os.path.join(args.save_logs, "RESULTS.txt"), "w", encoding="utf-8") as f:
-            f.writelines(results_log)
-        print(f"\n{CYAN}Saved logs to {args.save_logs}/IFJCODE.txt and {args.save_logs}/RESULTS.txt{RESET}")
+        for fname, lines in (
+            ("IFJCODE.txt", ifjcode_log),
+            ("RESULTS.txt", results_log),
+            ("DIFF.txt", diff_log),
+        ):
+            with open(os.path.join(args.save_logs, fname), "w", encoding="utf-8") as f:
+                f.writelines(lines)
+        print(
+            f"\n{CYAN}Saved logs to {args.save_logs}/IFJCODE.txt, "
+            f"{args.save_logs}/RESULTS.txt and {args.save_logs}/DIFF.txt{RESET}"
+        )
 
+    failed = len(failed_names)
     total = passed + failed
     color = GREEN if failed == 0 else RED
     print(f"\n{BOLD}{'=' * 70}{RESET}")
@@ -409,6 +417,8 @@ def main() -> int:
         f"{BOLD}Summary:{RESET} Total: {total} | "
         f"{GREEN}Passed: {passed}{RESET} | {color}Failed: {failed}{RESET}"
     )
+    if failed_names:
+        print(f"{RED}Failed:{RESET} {' '.join(failed_names)}")
     print(f"{BOLD}{'=' * 70}{RESET}")
     return 0 if failed == 0 else 1
 

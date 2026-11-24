@@ -1,0 +1,10 @@
+import ifj26.*
+@main def main(): Unit =
+    val a = 10
+    val b = 3
+    val sum = a + b * 2
+    val neg = -a + 2.5
+    print(sum)
+    print(" ")
+    print(neg)
+

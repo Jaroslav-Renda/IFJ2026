@@ -1,0 +1,6 @@
+import ifj26.*
+
+@main def m(): Unit =
+  val z = 0
+  val s = 1 / z
+  print(s)

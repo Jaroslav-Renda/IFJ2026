@@ -1,0 +1,17 @@
+import ifj26.*
+@main def main(): Unit =
+    val s = "IFJ" + "2026"
+    val len = strLength(s)
+    val sub = subStr(s, 0, 3)
+    val code = ord(s, 0)
+    val ch = chr(65)
+    print(s)
+    print(" ")
+    print(len)
+    print(" ")
+    print(sub)
+    print(" ")
+    print(code)
+    print(" ")
+    print(ch)
+

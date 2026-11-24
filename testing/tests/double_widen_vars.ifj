@@ -1,0 +1,19 @@
+import ifj26.*
+
+def half(x: Double): Double = x / 2
+
+@main def m(): Unit =
+  val d: Double = 5
+  print(d)
+  print(" ")
+  var e: Double = 1.0
+  e = 2
+  print(e)
+  print(" ")
+  val h = half(5)
+  print(h)
+  print(" ")
+  val i = 3
+  val j = half(i)
+  print(j)
+  print("\n")

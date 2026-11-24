@@ -1,0 +1,32 @@
+import ifj26.*
+
+def u(): Unit =
+  val x = 1
+
+def early(x: Int): Unit =
+  if x < 5 then
+    print("small ")
+  else
+    ()
+  return 7
+
+def unitExpr(): Unit = print("p ")
+
+@main def m(): Unit =
+  val a = u()
+  print(a)
+  print(" ")
+  val b = early(1)
+  print(b)
+  print(" ")
+  val c = ()
+  print(c)
+  print(" ")
+  val d = toStr(c)
+  print(d)
+  print(" ")
+  val e = unitExpr()
+  print(e)
+  print(" ")
+  print(())
+  print("\n")

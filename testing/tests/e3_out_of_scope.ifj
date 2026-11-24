@@ -1,0 +1,8 @@
+import ifj26.*
+
+@main def m(): Unit =
+  if 1 < 2 then
+    val y = 1
+  else
+    ()
+  print(y)

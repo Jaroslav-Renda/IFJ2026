@@ -1,0 +1,10 @@
+import ifj26.*
+
+@main def m(): Unit =
+  val a: Int = 3
+  val b: String = "s"
+  val c: Double = 2.5
+  var d: Int = a
+  d = d + 1
+  print(a); print(b); print(c); print(d)
+  print("\n")

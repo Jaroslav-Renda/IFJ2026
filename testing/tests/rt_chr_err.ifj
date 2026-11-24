@@ -1,0 +1,5 @@
+import ifj26.*
+
+@main def m(): Unit =
+  val s = chr(200)
+  print(s)

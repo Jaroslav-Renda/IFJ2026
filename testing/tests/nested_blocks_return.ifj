@@ -1,0 +1,21 @@
+import ifj26.*
+
+def find(n: Int): String =
+  var i = 0
+  while i < 10 do
+    if i == n then
+      if n > 5 then
+        return "big"
+      else
+        return "small"
+    else
+      ()
+    i = i + 1
+  "none"
+
+@main def m(): Unit =
+  val a = find(2)
+  val b = find(7)
+  val c = find(20)
+  print(a); print(b); print(c)
+  print("\n")

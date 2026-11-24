@@ -1,0 +1,7 @@
+import ifj26.*
+def ping(n: Int) = pong(n - 1) + 1
+def pong(n: Int) = ping(n - 1) + 2
+@main def main(): Unit =
+    val res = ping(4)
+    print(res)
+

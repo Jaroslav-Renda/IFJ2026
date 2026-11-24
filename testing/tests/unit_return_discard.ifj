@@ -1,0 +1,14 @@
+import ifj26.*
+
+def f(): Unit =
+  42
+
+def g(): Unit =
+  return 5
+
+@main def m(): Unit =
+  val a = f()
+  val b = g()
+  print(a)
+  print(b)
+  print("\n")

@@ -1,0 +1,7 @@
+import ifj26.*
+
+@main def m(): Unit =
+  var v: Unit = ()
+  v = ()
+  print(v)
+  print("\n")

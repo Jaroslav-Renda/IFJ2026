@@ -1,0 +1,17 @@
+import ifj26.*
+
+@main def m(): Unit =
+  val a = 2147483647
+  val b = a + 1
+  print(b)
+  print(" ")
+  val c = -2147483647 - 1
+  val d = c - 1
+  print(d)
+  print(" ")
+  val e = 100000 * 100000
+  print(e)
+  print(" ")
+  val f = -c
+  print(f)
+  print("\n")
