@@ -371,15 +371,14 @@ static uint8_t collectAllFunc(SemanticContext *ctx, ASTNode *functions) {
         funcInTable->data.func.hasReturnStmt = false;
         funcInTable->data.func.isMain = curr->data.funcDef.isMain;
 
-        funcInTable->mangledName =
+        char *mangledName =
             createMangledFuncName(curr->data.funcDef.name, curr->data.funcDef.isMain);
-        if (funcInTable->mangledName == NULL) {
+        if (mangledName == NULL) {
             return ERR_INTERNAL;
         }
-        curr->data.funcDef.mangledName = dupCString(funcInTable->mangledName);
-        if (curr->data.funcDef.mangledName == NULL) {
-            return ERR_INTERNAL;
-        }
+        // symtable and node share the same string thus are removed only in ast.c
+        curr->data.funcDef.mangledName = mangledName;
+        funcInTable->mangledName = mangledName;
 
         size_t paramCnt = getNumberOfParams(curr->data.funcDef.params);
         funcInTable->data.func.paramCount = paramCnt;
