@@ -2,8 +2,7 @@
  * @file    semantAnalys.c
  * @brief   Implementation of semantic analysis over the Abstract Syntax Tree (AST)
  * @author  Jakub Poláček (xpolacj00)
- * @date    2026-11-17
- * @details project: IFJ2026
+ * @details project_IFJ2026
  */
 
 #include "semantAnalys.h"

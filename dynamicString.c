@@ -2,9 +2,9 @@
  * @file    dynamicString.c
  * @author  Jakub Zenata (xzenatj00)
  * @brief   Source file of dynamic string
- * @date    2026-11-16
  * @details project_IFJ2026
  */
+
 #include "dynamicString.h"
 #include <stdlib.h>
 #include <string.h>

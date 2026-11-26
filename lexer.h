@@ -2,7 +2,6 @@
  * @file    lexer.h
  * @author  Jakub Zenata (xzenatj00)
  * @brief   header file of lexer
- * @date    2026-11-19
  * @details project_IFJ2026
  */
 

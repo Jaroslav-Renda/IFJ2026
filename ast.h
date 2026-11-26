@@ -1,10 +1,10 @@
 /**
  * @file    ast.h
- * @brief   Source file for abstract syntax tree
+ * @brief   Header file for abstract syntax tree
  * @author  Jakub Poláček (xpolacj00)
- * @date    2026-11-12
- * @details project: IFJ2026
+ * @details project_IFJ2026
  */
+
 #ifndef AST_H
 #define AST_H
 

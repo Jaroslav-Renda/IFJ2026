@@ -2,8 +2,7 @@
  * @file    symtableStack.c
  * @brief   Header file for semanthical analysis
  * @author  Jakub Poláček (xpolacj00)
- * @date    2026-11-6
- * @details project: IFJ2026
+ * @details project_IFJ2026
  */
 
 #ifndef SYMANALYS_H

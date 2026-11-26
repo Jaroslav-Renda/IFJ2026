@@ -2,7 +2,6 @@
  * @file    dynamicString.h
  * @author  Jakub Zenata (xzenatj00)
  * @brief   header file dynamic string
- * @date    2026-11-16
  * @details project_IFJ2026
  */
 

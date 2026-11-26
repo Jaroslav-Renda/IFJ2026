@@ -2,8 +2,7 @@
  * @file    symtableStack.h
  * @brief   Header file for stack of symtables
  * @author  Jakub Poláček (xpolacj00)
- * @date    2026-11-6
- * @details project: IFJ2026
+ * @details project_IFJ2026
  */
 #ifndef SYMSTACK_H
 #define SYMSTACK_H
