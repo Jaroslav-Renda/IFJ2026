@@ -2,7 +2,6 @@
  * @file    symtable.c
  * @brief   Source file for symbol table data type (Hashtable - open addressing)
  * @author  Jakub Poláček (xpolacj00)
- * @date    2026-10-19
  * @details project_IFJ2026
  */
 

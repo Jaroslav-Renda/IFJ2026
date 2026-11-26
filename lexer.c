@@ -2,7 +2,6 @@
  * @file    lexer.c
  * @author  Jakub Zenata (xzenatj00)
  * @brief   lexer implementation
- * @date    2026-11-19
  * @details project_IFJ2026
  */
 

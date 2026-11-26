@@ -2,9 +2,9 @@
  * @file    symtableStack.c
  * @brief   Source file for implementation of Stack of symtables
  * @author  Jakub Poláček (xpolacj00)
- * @date    2026-11-6
- * @details project: IFJ2026
+ * @details project_IFJ2026
  */
+
 #include "symtableStack.h"
 #include "symtable.h"
 #include <stdlib.h>
