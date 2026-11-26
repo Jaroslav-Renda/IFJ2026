@@ -40,3 +40,46 @@ jobs:
       - name: Verify the compiler binary was produced
         run: |
           test -x ./compiler
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: compiler
+          path: ./compiler
+
+  test:
+    name: test
+    runs-on: ubuntu-24.04
+    needs: build
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Setup python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.15
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: compiler
+          path: .
+
+      #  Workaround for downloading from moodle, just for safety also check the sha256sum
+      - name: Download interpreter
+        run: |
+          wget -q https://cdn.0016.cz/Chblk7ft/ic26int-linux-x86_64
+          echo "9ebc3ed9d5d24c72972719020b90597355357b56b6473ea94160c8879aeca097  ic26int-linux-x86_64" | sha256sum -c -
+
+      # Artifacts and downloads lose the executable bit.
+      - name: Make binaries executable
+        run: |
+          chmod +x ./compiler ./ic26int-linux-x86_64
+
+      - name: Run tests
+        run: |
+          python ./testing/run_simple_tests.py --bin ./compiler --int ./ic26int-linux-x86_64 --verbose
