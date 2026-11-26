@@ -469,6 +469,7 @@ static bool reduceRparStart(PrecStackElem *elem, PrecStack *stack) {
             return false;
         }
 
+        // E -> id()
         if (elem->type == P_STACK_ID) {
             if (elem->identifier == NULL) {
                 errorParser(0, "identifier is NULL");
@@ -485,6 +486,18 @@ static bool reduceRparStart(PrecStackElem *elem, PrecStack *stack) {
 
             elem->identifier = NULL;
             return reduceNEl(stack, 3, true, node);
+        }
+
+        // E -> ()
+        if (elem->type == P_STACK_STOP) {
+            ASTNode *node = createNode(NODE_LITERAL);
+            if (node == NULL) {
+                errorInternal(0, "mem allocation for Unit literal failed");
+                return false;
+            }
+            node->data.literal.litType = TYPE_UNIT;
+
+            return reduceNEl(stack, 2, false, node);
         }
 
         errorParser(0, "unexpected symbol before '()'");

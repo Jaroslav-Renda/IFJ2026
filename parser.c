@@ -58,38 +58,6 @@ static bool isLookaheadExpressionFirst(currentToken *cur) {
     }
 }
 
-bool parseStAfterLPar(currentToken *cur, ASTNode **statement) {
-    lookaheadToken lat;
-    lat.token = cur->token;
-    lat.isEmpty = false;
-    if (!nextToken(cur)) {
-        return false;
-    }
-
-    // is ()
-    if (cur->token.type == TOKEN_RIGHT_BRACKET) {
-        lat.isEmpty = true;
-        if (!nextToken(cur)) {
-            return false;
-        }
-
-        ASTNode *node = createNode(NODE_LITERAL);
-        if (node == NULL) {
-            errorInternal(cur->token.line, "mem allocation failed");
-            return false;
-        }
-        node->data.literal.litType = TYPE_UNIT;
-        *statement = node;
-        return true;
-    }
-
-    // not () -> expression (E)
-    if (!parseExpression(cur, &lat, statement)) {
-        return false;
-    }
-    return expectToken(cur, TOKEN_EOL, "expected EOL after expression");
-}
-
 bool parseStAfterId(currentToken *cur, ASTNode **statement) {
     // lookahead token holds id
     lookaheadToken lat;
@@ -363,10 +331,6 @@ bool parseStat(currentToken *cur, ASTNode **statement) {
     // parse expression
     if (cur->token.type == TOKEN_IDENTIFIER) {
         return parseStAfterId(cur, statement);
-    }
-
-    if (cur->token.type == TOKEN_LEFT_BRACKET) {
-        return parseStAfterLPar(cur, statement);
     }
 
     if (isFirstExp(cur)) {
