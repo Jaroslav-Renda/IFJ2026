@@ -244,6 +244,8 @@ static bool translateTokenToTable(Token *token, precOperators *tableOp, bool isN
     }
 }
 
+// AI generated function: Make me a translation function (bool) between the operators on the stack
+// {insert enum} and the operators for ast {insert enum}. Use switch and return true if translated.
 static bool translateStackOpToBinOp(PrecStackType stackOp, BinaryOpType *outOp) {
     switch (stackOp) {
     case P_STACK_PLS:
@@ -332,7 +334,6 @@ static bool shiftNoStop(PrecStack *stack, Token *token, bool isNeg) {
         return false;
     }
 
-    // all precPushes probably need checks (update precstack)
     if (!precPush(stack, type)) {
         return false;
     }
@@ -612,7 +613,6 @@ static bool reduceExpStart(PrecStackElem *elem, PrecStack *stack) {
     }
     default:
         errorParser(0, "invalid operator or symbol before expression");
-        // error
         return false;
     }
 }
@@ -711,24 +711,19 @@ bool resolveToken(Token *token, PrecStack *stack) {
         switch (result) {
         case S:
             if (!shift(stack, token, isNeg)) {
-                // internal error
                 return false;
             }
             isprecPushed = true;
             break;
         case R:
             if (!reduce(stack)) {
-                // syntax error
                 return false;
             }
             break;
         case E:
-            errorParser(0, "precedence analysis error TODO");
-            // syntax error
             return false;
         case Q:
             if (!shiftNoStop(stack, token, isNeg)) {
-                // internal error
                 return false;
             }
             isprecPushed = true;
@@ -748,11 +743,13 @@ bool parseExpression(currentToken *cur, lookaheadToken *lat, ASTNode **expr) {
     if (!precInitStack(&stack)) {
         return false;
     }
-    if (!precPush(&stack, P_STACK_END)) { // the first token on the stack is an end '$'
+
+    // the first token on the stack is an end '$'
+    if (!precPush(&stack, P_STACK_END)) {
         return false;
     }
 
-    // lookahead token will always be nothing or id
+    // lookahead token will always be nothing or id or '('
     if (lat != NULL && !lat->isEmpty) {
         if (!resolveToken(&lat->token, &stack)) {
             if (lat->token.type == TOKEN_IDENTIFIER && lat->token.data.identifier != NULL) {

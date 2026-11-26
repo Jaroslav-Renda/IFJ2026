@@ -40,6 +40,7 @@ typedef struct {
  * delegates function declarations to parseFooList(), and checks for EOF.
  *
  * @param[in,out] cur Pointer to the current token structure.
+ * @param[in,out] program Abstract syntax tree node to be created
  * @return true if the entire program is syntactically valid, false otherwise.
  */
 bool parseProg(currentToken *cur, ASTNode *program);
@@ -52,6 +53,7 @@ bool parseProg(currentToken *cur, ASTNode *program);
  * - Rule 3: <FOO-LIST> => e
  *
  * @param[in,out] cur Pointer to the current token structure.
+ * @param[in,out] function Abstract syntax tree node to be created
  * @return true if the function list (or epsilon at EOF) is valid, false otherwise.
  */
 bool parseFooList(currentToken *cur, ASTNode **function);
@@ -68,6 +70,7 @@ bool parseFooList(currentToken *cur, ASTNode **function);
  * by the semantic analysis and the parser allows invalid statements.
  *
  * @param[in,out] cur Pointer to the current token structure.
+ * @param[in,out] function Abstract syntax tree node to be created
  * @return true if the function header and body are valid, false otherwise.
  */
 bool parseFooDec(currentToken *cur, ASTNode **function);
@@ -95,6 +98,7 @@ bool parseOptEol(currentToken *cur);
  * - Rule 9: <PARAMS> => "id" <OPT-EOL> ":" <OPT-EOL> <TYPE> <OPT-EOL> <NEXT-PARAM>
  *
  * @param[in,out] cur Pointer to the current token structure.
+ * @param[in,out] fooParams Abstract syntax tree node to be created
  * @return true if the parameter list (or empty list before ')') is valid, false otherwise.
  */
 bool parseParams(currentToken *cur, ASTNode **fooParams);
@@ -107,6 +111,7 @@ bool parseParams(currentToken *cur, ASTNode **fooParams);
  * - Rule 11: <NEXT-PARAM> => "," <AFTER-COM>
  *
  * @param[in,out] cur Pointer to the current token structure.
+ * @param[in,out] nextParam Abstract syntax tree node to be created
  * @return true if the parameter continuation or closing parenthesis follows, false otherwise.
  */
 bool parseNextParam(currentToken *cur, ASTNode **nextParam);
@@ -121,6 +126,7 @@ bool parseNextParam(currentToken *cur, ASTNode **nextParam);
  * Supports trailing commas before a closing parenthesis when followed by EOL.
  *
  * @param[in,out] cur Pointer to the current token structure.
+ * @param[in,out] nextParam Abstract syntax tree node to be created
  * @return true if the tokens after the comma are valid, false otherwise.
  */
 bool parseAfterCom(currentToken *cur, ASTNode **nextParam);
@@ -135,6 +141,7 @@ bool parseAfterCom(currentToken *cur, ASTNode **nextParam);
  * Handles both multi-line indented blocks and single-line expression bodies.
  *
  * @param[in,out] cur Pointer to the current token structure.
+ * @param[in,out] fooBody Abstract syntax tree node to be created
  * @return true if the function body is syntactically valid, false otherwise.
  */
 bool parseFooBody(currentToken *cur, ASTNode **fooBody);
@@ -146,6 +153,7 @@ bool parseFooBody(currentToken *cur, ASTNode **fooBody);
  * - Rule 16: <BLOCK> => "Indent" <ST-LIST> "Dedent"
  *
  * @param[in,out] cur Pointer to the current token structure.
+ * @param[in,out] block Abstract syntax tree node to be created
  * @return true if the block is properly indented, contains valid statements, and dedents, false
  * otherwise.
  */
@@ -159,6 +167,7 @@ bool parseBlock(currentToken *cur, ASTNode **block);
  * - Rule 18: <ST-LIST> => <BLOCK-STAT> <ST-REST>
  *
  * @param[in,out] cur Pointer to the current token structure.
+ * @param[in,out] statement Abstract syntax tree node to be created
  * @return true if the statement list is valid, false otherwise.
  */
 bool parseStList(currentToken *cur, ASTNode **statement);
@@ -173,6 +182,7 @@ bool parseStList(currentToken *cur, ASTNode **statement);
  * Allows multiple statements on a single line separated by semicolons.
  *
  * @param[in,out] cur Pointer to the current token structure.
+ * @param[in,out] nextStatement Abstract syntax tree node to be created
  * @return true if a valid statement delimiter and remaining statements follow, false otherwise.
  */
 bool parseStNext(currentToken *cur, ASTNode **nextStatement);
@@ -188,6 +198,7 @@ bool parseStNext(currentToken *cur, ASTNode **nextStatement);
  * Terminates via epsilon transition when a Dedent token is encountered.
  *
  * @param[in,out] cur Pointer to the current token structure.
+ * @param[in,out] nextStatement Abstract syntax tree node to be created
  * @return true if the rest of the block is syntactically valid, false otherwise.
  */
 bool parseStRest(currentToken *cur, ASTNode **nextStatement);
@@ -203,6 +214,7 @@ bool parseStRest(currentToken *cur, ASTNode **nextStatement);
  * - Rule 38: <STAT> => "id" <ST-AFTER-ID>
  *
  * @param[in,out] cur Pointer to the current token structure.
+ * @param[in,out] statement Abstract syntax tree node to be created
  * @return true if the simple statement is valid, false otherwise.
  */
 bool parseStat(currentToken *cur, ASTNode **statement);
@@ -215,6 +227,7 @@ bool parseStat(currentToken *cur, ASTNode **statement);
  * - Rule 29: <BLOCK-STAT> => "while" <EXP> "do" "EOL" <BLOCK>
  *
  * @param[in,out] cur Pointer to the current token structure.
+ * @param[in,out] statement Abstract syntax tree node to be created
  * @return true if the conditional or loop statement is valid, false otherwise.
  */
 bool parseBlockStat(currentToken *cur, ASTNode **statement);
@@ -227,6 +240,7 @@ bool parseBlockStat(currentToken *cur, ASTNode **statement);
  * - Rule 31: <RET-VAL> => <EXP>
  *
  * @param[in,out] cur Pointer to the current token structure.
+ * @param[in,out] expr Abstract syntax tree node to be created
  * @return true if a valid expression or statement delimiter ("EOL", ";") follows, false otherwise.
  */
 bool parseRetVal(currentToken *cur, ASTNode **expr);
@@ -241,6 +255,7 @@ bool parseRetVal(currentToken *cur, ASTNode **expr);
  * Used in variable declarations (val/var) and function return types before '='.
  *
  * @param[in,out] cur Pointer to the current token structure.
+ * @param[in,out] type Abstract syntax tree node to be created
  * @return true if a valid type annotation or '=' token is found, false otherwise.
  */
 bool parseOptType(currentToken *cur, dataType *type);
@@ -255,6 +270,7 @@ bool parseOptType(currentToken *cur, dataType *type);
  * - Rule 37: <TYPE> => "Unit"
  *
  * @param[in,out] cur Pointer to the current token structure.
+ * @param[in,out] type Abstract syntax tree node to be created
  * @return true if the current token represents a valid data type, false otherwise.
  */
 bool parseType(currentToken *cur, dataType *type);
@@ -269,6 +285,7 @@ bool parseType(currentToken *cur, dataType *type);
  *   [1] needs to parse a lookahead token
  *
  * @param[in,out] cur Pointer to the current token structure.
+ * @param[in,out] statement Abstract syntax tree node to be created
  * @return true if the current token represents a valid continuation after id, false otherwise.
  */
 bool parseStAfterId(currentToken *cur, ASTNode **statement);
