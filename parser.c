@@ -36,6 +36,7 @@ static bool expectKeyword(currentToken *cur, keyword expectedKey, const char *er
     return nextToken(cur);
 }
 
+// helper function for <EXP> FIRST() set
 static bool isLookaheadExpressionFirst(currentToken *cur) {
     switch (cur->token.type) {
     case TOKEN_LEFT_BRACKET:
@@ -59,7 +60,6 @@ static bool isLookaheadExpressionFirst(currentToken *cur) {
 }
 
 bool parseStAfterId(currentToken *cur, ASTNode **statement) {
-    // lookahead token holds id
     lookaheadToken lat;
     lat.token = cur->token;
     lat.isEmpty = true;
