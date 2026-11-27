@@ -22,42 +22,74 @@
  */
 typedef struct {
     int currLine;
-    int indentStack[MAX_INDENT_SIZE];
-    int stackCount;
+    int indentStack[MAX_INDENT_SIZE]; // stack of active indentation levels
+    int stackCount;                   // count of active entries on indentStack
     bool isNewLine;
     int pendingDedents; // in case multiple indent blocks end at the same time
     // and lexer has to return multiple dedent tokens in a row
-    int bracketCount; // needed for eol in brackets handling
-    bool pendingDivide;
-    bool lineHasCode; // potreba pro vyreseni zda vratit eol
+    int bracketCount;   // needed for eol in brackets handling
+    bool pendingDivide; // Deferred TOKEN_DIVIDE when '/' starts a line before indent is resolved
+    bool lineHasCode;   // tells us if we should return EOL
 } lexerState;
+
+/**
+ * @brief Mapping between a keyword lexeme and its enum value
+ */
 typedef struct TKeywordPair {
     const char *str;
     keyword keywordVal;
-} KeywordPair; // struct used to compare string with keywords
+} KeywordPair;
 
-static lexerState g_lexerState; // private lexer state,
-// used primarelly for parsing indent/dedent blocks
-static bool g_lexerStateInitialized;
+static lexerState g_lexerState;      // private lexer state
+static bool g_lexerStateInitialized; // ensures lexerStateInit() was called before getToken()
 
+/**
+ * @brief Reports a lexical error on the current line and returns ERR_LEXER
+ * @param msg Error description message
+ * @return ERR_LEXER
+ */
 static int lexicalError(const char *msg) {
     errorLexer(g_lexerState.currLine, msg);
     return ERR_LEXER;
 }
+
+/**
+ * @brief Frees a dynamic string buffer, reports a lexical error, and returns ERR_LEXER
+ * @param dynStr Dynamic string buffer to free
+ * @param msg Error description message
+ * @return ERR_LEXER
+ */
 static int lexicalErrorFree(DynamicString *dynStr, const char *msg) {
     strFree(dynStr);
     errorLexer(g_lexerState.currLine, msg);
     return ERR_LEXER;
 }
+
+/**
+ * @brief Reports an internal error on the current line and returns ERR_INTERNAL
+ * @param msg Error description message
+ * @return ERR_INTERNAL
+ */
 static int internalError(const char *msg) {
     errorInternal(g_lexerState.currLine, msg);
     return ERR_INTERNAL;
 }
+
+/**
+ * @brief Frees a dynamic string buffer, reports an internal error, and returns ERR_INTERNAL
+ * @param dynStr Dynamic string buffer to free
+ * @param msg Error description message
+ * @return ERR_INTERNAL
+ */
 static int internalErrorFree(DynamicString *dynStr, const char *msg) {
     strFree(dynStr);
     errorInternal(g_lexerState.currLine, msg);
     return ERR_INTERNAL;
 }
+
+/**
+ * @brief Initializes the internal lexer state before scanning input
+ */
 void lexerStateInit() {
     g_lexerStateInitialized = true;
     g_lexerState.currLine = 1;
@@ -69,6 +101,13 @@ void lexerStateInit() {
     g_lexerState.lineHasCode = false;
     g_lexerState.pendingDivide = false;
 }
+
+/**
+ * @brief Checks if the string is keyword
+ * @param str1 string to check
+ * @param detectedKeyword detected keyword
+ * @return true if str1 is a keyword, false if not
+ */
 static bool checkForKeyword(DynamicString *str1, keyword *detectedKeyword) {
     static const KeywordPair keywords[] = {{"def", KEYWORD_DEF}, {"do", KEYWORD_DO},
         {"Double", KEYWORD_DOUBLE}, {"else", KEYWORD_ELSE}, {"if", KEYWORD_IF},
@@ -87,6 +126,12 @@ static bool checkForKeyword(DynamicString *str1, keyword *detectedKeyword) {
     return false;
 }
 
+/**
+ * @brief finishes a TOKEN_STRING by copying the dynamic string content into the token
+ * @param token Output token
+ * @param dynStr Dynamic string to be copyied
+ * @return 0 on success, ERR_INTERNAL on memory allocation failure
+ */
 static int finishStringToken(Token *token, DynamicString *dynStr) {
     token->type = TOKEN_STRING;
     token->line = g_lexerState.currLine;
@@ -99,48 +144,78 @@ static int finishStringToken(Token *token, DynamicString *dynStr) {
     g_lexerState.lineHasCode = true;
     return 0;
 }
+
+/**
+ * @brief reads the next token from stdin using a FSM
+ * @param token output token
+ * @return 0 on success, ERR_LEXER on lexical error, or ERR_INTERNAL on internal error
+ */
 int getToken(Token *token) {
     if (!g_lexerStateInitialized) {
-        errorInternal(
-            0, "lexerStateInit was not called before getToken"); // nemuzu volat internalError()
-                                                                 // protoze accesuje
-                                                                 // neinicializovany lexerstate
+        errorInternal( // cannot call internalError() because g_lexerState is not initialized yet
+            0, "lexerStateInit was not called before getToken");
         return ERR_INTERNAL;
     }
-    int currState = STATE_START;
+    enum automatState currState = STATE_START;
     DynamicString dynStr;
     int spaceCount = 0;
-    int commentDepth = 0;           // pro vnorene blokove komentare
-    bool commentHasNewline = false; // pro blokove komentare
+    int commentDepth = 0;           // nesting depth for nested block comments
+    bool commentHasNewline = false; // for block comments
     while (true) {
-        int znak = getchar();
+        int currChar = getchar();
         switch (currState) {
-        case STATE_START: {                      // pocatecni stav
-            if (g_lexerState.pendingDedents > 0) // vracime dedenty ktere dluzime
+        case STATE_START: {                      // initial state
+            if (g_lexerState.pendingDedents > 0) // emits dedent tokens first
             {
-                (void)ungetc(znak, stdin); // pretypovano na void kvuli clang tidy;
+                (void)ungetc(currChar, stdin); // cast to void for clang-tidy
                 g_lexerState.pendingDedents--;
                 token->type = TOKEN_DEDENT;
                 token->line = g_lexerState.currLine;
                 return 0;
             }
-            if (g_lexerState.pendingDivide) {
-                (void)ungetc(znak, stdin); // pretypovano na void kvuli clang tidy;
+            if (g_lexerState.pendingDivide) { // emits pending divide token
+                (void)ungetc(currChar, stdin);
                 g_lexerState.pendingDivide = false;
                 token->type = TOKEN_DIVIDE;
                 token->line = g_lexerState.currLine;
                 g_lexerState.lineHasCode = true;
                 return 0;
             }
-            if (g_lexerState.isNewLine) {
-                (void)ungetc(znak, stdin); // pretypovano na void kvuli clang tidy;
+            if (g_lexerState.isNewLine) { // start of newline, measures indentation
+                (void)ungetc(currChar, stdin);
                 currState = STATE_LINE_BEG;
                 break;
             }
-            if (znak == EOF) {
+
+            if (currChar == ' ' || currChar == '\t') { // whitespace skip
+                break;
+            }
+            if (isalpha(currChar) || currChar == '_') { // identifier /keyword
+                if (strInit(&dynStr) != 0) {
+                    return internalError("memory allocation failed");
+                }
+                if (strAddChar(&dynStr, (char)currChar) != 0) {
+                    return internalErrorFree(&dynStr, "memory allocation failed");
+                }
+                currState = STATE_IDENTIFIER; // identifikator
+                break;
+            }
+            if (currChar > '0' && currChar <= '9') { // number
+                if (strInit(&dynStr) != 0) {
+                    return internalError("memory allocation failed");
+                }
+                if (strAddChar(&dynStr, (char)currChar) != 0) {
+                    return internalErrorFree(&dynStr, "memory allocation failed");
+                }
+                currState = STATE_FULL_NUMBER;
+                break;
+            }
+            switch (currChar) {
+            case EOF: {
                 spaceCount = 0;
-                (void)ungetc(znak, stdin);
-                if (g_lexerState.bracketCount == 0 && g_lexerState.lineHasCode) {
+                (void)ungetc(currChar, stdin);
+                if (g_lexerState.bracketCount == 0 &&
+                    g_lexerState.lineHasCode) { // emit last eol before eof
                     g_lexerState.lineHasCode = false;
                     g_lexerState.isNewLine = true;
                     token->type = TOKEN_EOL;
@@ -150,7 +225,7 @@ int getToken(Token *token) {
                 currState = STATE_PROCESS_INDENT;
                 break;
             }
-            if (znak == '\n') {
+            case '\n': {
                 if (g_lexerState.bracketCount == 0) {
                     g_lexerState.isNewLine = true;
                     token->type = TOKEN_EOL;
@@ -162,19 +237,16 @@ int getToken(Token *token) {
                 }
                 g_lexerState.isNewLine = false;
                 g_lexerState.currLine++;
-                break; // newline je uvnitr zavorek, pokracujeme ve cteni
+                break; // ignore newline inside brackets
             }
-            if (znak == ' ' || znak == '\t') {
-                break;
-            }
-            if (znak == '(') {
+            case '(': {
                 token->type = TOKEN_LEFT_BRACKET;
                 token->line = g_lexerState.currLine;
                 g_lexerState.bracketCount++;
                 g_lexerState.lineHasCode = true;
                 return 0;
             }
-            if (znak == ')') {
+            case ')': {
                 token->type = TOKEN_RIGHT_BRACKET;
                 token->line = g_lexerState.currLine;
                 if (g_lexerState.bracketCount > 0) {
@@ -183,121 +255,106 @@ int getToken(Token *token) {
                 g_lexerState.lineHasCode = true;
                 return 0;
             }
-            if (znak == ';') {
+            case ';': {
                 token->type = TOKEN_SEMICOLON;
                 token->line = g_lexerState.currLine;
                 g_lexerState.lineHasCode = true;
                 return 0;
             }
-            if (znak == ':') {
+            case ':': {
                 token->type = TOKEN_COLON;
                 token->line = g_lexerState.currLine;
                 g_lexerState.lineHasCode = true;
                 return 0;
             }
-            if (znak == '.') {
+            case '.': {
                 currState = STATE_PERIOD;
                 break;
             }
-            if (znak == ',') {
+            case ',': {
                 token->type = TOKEN_COMMA;
                 token->line = g_lexerState.currLine;
                 g_lexerState.lineHasCode = true;
                 return 0;
             }
-            if (znak == '+') {
+            case '+': {
                 token->type = TOKEN_PLUS;
                 token->line = g_lexerState.currLine;
                 g_lexerState.lineHasCode = true;
                 return 0;
             }
-            if (znak == '-') {
+            case '-': {
                 token->type = TOKEN_MINUS;
                 token->line = g_lexerState.currLine;
                 g_lexerState.lineHasCode = true;
                 return 0;
             }
-            if (znak == '*') {
+            case '*': {
                 token->type = TOKEN_MULTIPLY;
                 token->line = g_lexerState.currLine;
                 g_lexerState.lineHasCode = true;
                 return 0;
             }
-            if (znak == '/') {
+            case '/': {
                 currState = STATE_SLASH;
                 break;
             }
-            if (znak == '<') {
+            case '<': {
                 currState = STATE_ANGLE_BRACKET_LESSER;
                 break;
             }
-            if (znak == '>') {
+            case '>': {
                 currState = STATE_ANGLE_BRACKET_BIGGER;
                 break;
             }
-            if (znak == '=') {
+            case '=': {
                 currState = STATE_EQUAL;
                 break;
             }
-            if (znak == '!') {
+            case '!': {
                 currState = STATE_EXCLAMATION_MARK;
                 break;
             }
-            if (znak == '@') {
+            case '@': {
                 if (strInit(&dynStr) != 0) {
                     return internalError("memory allocation failed");
                 }
                 currState = STATE_AT_SIGN;
                 break;
             }
-            if (znak == '"') {
+            case '"': {
                 if (strInit(&dynStr) != 0) {
                     return internalError("memory allocation failed");
                 }
                 currState = STATE_STRING_START;
                 break;
             }
-            if (isalpha(znak) || znak == '_') {
+
+            case '0': {
                 if (strInit(&dynStr) != 0) {
                     return internalError("memory allocation failed");
                 }
-                if (strAddChar(&dynStr, (char)znak) != 0) {
-                    return internalErrorFree(&dynStr, "memory allocation failed");
-                }
-                currState = STATE_IDENTIFIER; // identifikator
-                break;
-            }
-            if (znak == '0') {
-                if (strInit(&dynStr) != 0) {
-                    return internalError("memory allocation failed");
-                }
-                if (strAddChar(&dynStr, (char)znak) != 0) {
+                if (strAddChar(&dynStr, (char)currChar) != 0) {
                     return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 currState = STATE_ZERO_NUMBER;
                 break;
             }
-            if (znak > '0' && znak <= '9') {
-                if (strInit(&dynStr) != 0) {
-                    return internalError("memory allocation failed");
-                }
-                if (strAddChar(&dynStr, (char)znak) != 0) {
-                    return internalErrorFree(&dynStr, "memory allocation failed");
-                }
-                currState = STATE_FULL_NUMBER; // cislo
-                break;
+            default: {
+                return lexicalError("unexpected character"); // unknown char
             }
-            return lexicalError("unexpected character"); // nezname znaky
+            }
+            break;
         }
-        case STATE_IDENTIFIER: // identifikator
+        case STATE_IDENTIFIER: // identifier or keyword
         {
-            if (isalnum(znak) || znak == '_') {
-                if (strAddChar(&dynStr, (char)znak) != 0) {
+            if (isalnum(currChar) || currChar == '_') {
+                if (strAddChar(&dynStr, (char)currChar) != 0) {
                     return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 break;
             }
-            (void)ungetc(znak, stdin); // pretypovano na void kvuli clang tidy;
+            (void)ungetc(currChar, stdin);
             if (strCompare(&dynStr, "_") == 0) {
                 return lexicalErrorFree(&dynStr, "standalone '_' is not a valid identifier");
             }
@@ -318,67 +375,64 @@ int getToken(Token *token) {
                 strFree(&dynStr);
             }
             token->line = g_lexerState.currLine;
-            return 0; // validni token, konec cele funkce
+            return 0; // valid token
         }
-        case STATE_ZERO_NUMBER: {
-            if (znak == '.') {
-                if (strAddChar(&dynStr, (char)znak) != 0) {
+        case STATE_ZERO_NUMBER: { // number starting with 0
+            if (currChar == '.') {
+                if (strAddChar(&dynStr, (char)currChar) != 0) {
                     return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 currState = STATE_DECIMAL_POINT;
-            } else if (znak == 'e' || znak == 'E') {
-                if (strAddChar(&dynStr, (char)znak) != 0) {
+            } else if (currChar == 'e' || currChar == 'E') {
+                if (strAddChar(&dynStr, (char)currChar) != 0) {
                     return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 currState = STATE_EXPONENT_E;
-            } else if (znak == 'd' || znak == 'D') {
+            } else if (currChar == 'd' || currChar == 'D') {
                 currState = STATE_DOUBLE_SUFFIX;
-            } else if (isdigit(znak)) { // lex chyba, cele cislo nesmi zacinat nulou
+            } else if (isdigit(currChar)) { // lex error, whole number cant start with zero
                 return lexicalErrorFree(&dynStr, "integer literal cannot start with leading zero");
             } else {
-                (void)ungetc(znak, stdin);
+                (void)ungetc(currChar, stdin);
                 token->type = TOKEN_INT;
                 token->line = g_lexerState.currLine;
-                char *endptr;
-                token->data.intVal = (int)strtol(dynStr.str, &endptr, 10);
+                token->data.intVal = (int)strtol(dynStr.str, NULL, 10);
                 g_lexerState.lineHasCode = true;
                 strFree(&dynStr);
                 return 0;
             }
             break;
         }
-        case STATE_FULL_NUMBER: // cislo
-        {
-            if (znak == '_') {
+        case STATE_FULL_NUMBER: {
+            if (currChar == '_') { // underscore is not included in the final number
                 currState = STATE_FULL_NUMBER_UNDERSCORE;
 
-            } else if (znak >= '0' && znak <= '9') {
-                if (strAddChar(&dynStr, (char)znak) != 0) {
+            } else if (currChar >= '0' && currChar <= '9') {
+                if (strAddChar(&dynStr, (char)currChar) != 0) {
                     return internalErrorFree(&dynStr, "memory allocation failed");
                 }
-                currState = STATE_FULL_NUMBER; // zustavame ve stejnem stavu
+                currState = STATE_FULL_NUMBER; // stays in the same state
 
-            } else if (znak == 'e' || znak == 'E') {
-                if (strAddChar(&dynStr, (char)znak) != 0) {
+            } else if (currChar == 'e' || currChar == 'E') {
+                if (strAddChar(&dynStr, (char)currChar) != 0) {
                     return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 currState = STATE_EXPONENT_E;
 
-            } else if (znak == 'd' || znak == 'D') {
+            } else if (currChar == 'd' || currChar == 'D') {
                 currState = STATE_DOUBLE_SUFFIX;
 
-            } else if (znak == '.') {
-                if (strAddChar(&dynStr, (char)znak) != 0) {
+            } else if (currChar == '.') {
+                if (strAddChar(&dynStr, (char)currChar) != 0) {
                     return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 currState = STATE_DECIMAL_POINT;
 
             } else {
-                (void)ungetc(znak, stdin);
+                (void)ungetc(currChar, stdin);
                 token->type = TOKEN_INT;
-                char *endptr;
                 token->line = g_lexerState.currLine;
-                token->data.intVal = (int)strtol(dynStr.str, &endptr, 10);
+                token->data.intVal = (int)strtol(dynStr.str, NULL, 10);
                 g_lexerState.lineHasCode = true;
                 strFree(&dynStr);
                 return 0;
@@ -387,10 +441,10 @@ int getToken(Token *token) {
             break;
         }
         case STATE_FULL_NUMBER_UNDERSCORE: {
-            if (znak == '_') {
+            if (currChar == '_') {
                 currState = STATE_FULL_NUMBER_UNDERSCORE;
-            } else if (znak >= '0' && znak <= '9') {
-                if (strAddChar(&dynStr, (char)znak) != 0) {
+            } else if (currChar >= '0' && currChar <= '9') {
+                if (strAddChar(&dynStr, (char)currChar) != 0) {
                     return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 currState = STATE_FULL_NUMBER;
@@ -401,10 +455,10 @@ int getToken(Token *token) {
             break;
         }
 
-        case STATE_DECIMAL_POINT: // cislo
+        case STATE_DECIMAL_POINT: // expecting a decimal number
         {
-            if (znak >= '0' && znak <= '9') {
-                if (strAddChar(&dynStr, (char)znak) != 0) {
+            if (currChar >= '0' && currChar <= '9') {
+                if (strAddChar(&dynStr, (char)currChar) != 0) {
                     return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 currState = STATE_DECIMAL_NUMBER;
@@ -415,40 +469,39 @@ int getToken(Token *token) {
             break;
         }
         case STATE_DECIMAL_NUMBER: {
-            if (znak == '_') {
+            if (currChar == '_') {
                 currState = STATE_DECIMAL_NUMBER_UNDERSCORE;
-            } else if (znak >= '0' && znak <= '9') {
-                if (strAddChar(&dynStr, (char)znak) != 0) {
+            } else if (currChar >= '0' && currChar <= '9') {
+                if (strAddChar(&dynStr, (char)currChar) != 0) {
                     return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 currState = STATE_DECIMAL_NUMBER;
-            } else if (znak == 'e' || znak == 'E') {
-                if (strAddChar(&dynStr, (char)znak) != 0) {
+            } else if (currChar == 'e' || currChar == 'E') {
+                if (strAddChar(&dynStr, (char)currChar) != 0) {
                     return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 currState = STATE_EXPONENT_E;
 
-            } else if (znak == 'd' || znak == 'D') {
+            } else if (currChar == 'd' || currChar == 'D') {
                 currState = STATE_DOUBLE_SUFFIX;
 
             } else {
-                (void)ungetc(znak, stdin);
+                (void)ungetc(currChar, stdin);
                 token->type = TOKEN_DOUBLE;
-                char *endptr;
                 token->line = g_lexerState.currLine;
-                token->data.doubleVal = strtod(dynStr.str, &endptr);
+                token->data.doubleVal = strtod(dynStr.str, NULL);
                 g_lexerState.lineHasCode = true;
                 strFree(&dynStr);
                 return 0;
             }
             break;
         }
-        case STATE_DECIMAL_NUMBER_UNDERSCORE: {
-            if (znak == '_') {
+        case STATE_DECIMAL_NUMBER_UNDERSCORE: { // underscore state inside decimal number
+            if (currChar == '_') {
                 currState = STATE_DECIMAL_NUMBER_UNDERSCORE;
 
-            } else if (znak >= '0' && znak <= '9') {
-                if (strAddChar(&dynStr, (char)znak) != 0) {
+            } else if (currChar >= '0' && currChar <= '9') {
+                if (strAddChar(&dynStr, (char)currChar) != 0) {
                     return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 currState = STATE_DECIMAL_NUMBER;
@@ -459,14 +512,14 @@ int getToken(Token *token) {
             break;
         }
         case STATE_EXPONENT_E: {
-            if (znak == '-' || znak == '+') {
-                if (strAddChar(&dynStr, (char)znak) != 0) {
+            if (currChar == '-' || currChar == '+') { // expecting optional sign
+                if (strAddChar(&dynStr, (char)currChar) != 0) {
                     return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 currState = STATE_EXPONENT_SIGN;
 
-            } else if (znak >= '0' && znak <= '9') {
-                if (strAddChar(&dynStr, (char)znak) != 0) {
+            } else if (currChar >= '0' && currChar <= '9') {
+                if (strAddChar(&dynStr, (char)currChar) != 0) {
                     return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 currState = STATE_EXPONENT_NUMBER;
@@ -476,8 +529,8 @@ int getToken(Token *token) {
             break;
         }
         case STATE_EXPONENT_SIGN: {
-            if (znak >= '0' && znak <= '9') {
-                if (strAddChar(&dynStr, (char)znak) != 0) {
+            if (currChar >= '0' && currChar <= '9') {
+                if (strAddChar(&dynStr, (char)currChar) != 0) {
                     return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 currState = STATE_EXPONENT_NUMBER;
@@ -487,22 +540,21 @@ int getToken(Token *token) {
             break;
         }
         case STATE_EXPONENT_NUMBER: {
-            if (znak == '_') {
+            if (currChar == '_') {
                 currState = STATE_EXPONENT_NUMBER_UNDERSCORE;
-            } else if (znak >= '0' && znak <= '9') {
-                if (strAddChar(&dynStr, (char)znak) != 0) {
+            } else if (currChar >= '0' && currChar <= '9') {
+                if (strAddChar(&dynStr, (char)currChar) != 0) {
                     return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 currState = STATE_EXPONENT_NUMBER;
-            } else if (znak == 'd' || znak == 'D') {
+            } else if (currChar == 'd' || currChar == 'D') {
                 currState = STATE_DOUBLE_SUFFIX;
 
             } else {
-                (void)ungetc(znak, stdin);
+                (void)ungetc(currChar, stdin);
                 token->type = TOKEN_DOUBLE;
-                char *endptr;
                 token->line = g_lexerState.currLine;
-                token->data.doubleVal = strtod(dynStr.str, &endptr);
+                token->data.doubleVal = strtod(dynStr.str, NULL);
                 g_lexerState.lineHasCode = true;
                 strFree(&dynStr);
                 return 0;
@@ -510,11 +562,11 @@ int getToken(Token *token) {
             break;
         }
         case STATE_EXPONENT_NUMBER_UNDERSCORE: {
-            if (znak == '_') {
+            if (currChar == '_') {
                 currState = STATE_EXPONENT_NUMBER_UNDERSCORE;
 
-            } else if (znak >= '0' && znak <= '9') {
-                if (strAddChar(&dynStr, (char)znak) != 0) {
+            } else if (currChar >= '0' && currChar <= '9') {
+                if (strAddChar(&dynStr, (char)currChar) != 0) {
                     return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 currState = STATE_EXPONENT_NUMBER;
@@ -523,26 +575,25 @@ int getToken(Token *token) {
             }
             break;
         }
-        case STATE_DOUBLE_SUFFIX: {
-            (void)ungetc(znak, stdin);
+        case STATE_DOUBLE_SUFFIX: { // d or D after number
+            (void)ungetc(currChar, stdin);
             token->type = TOKEN_DOUBLE;
-            char *endptr;
             token->line = g_lexerState.currLine;
-            token->data.doubleVal = strtod(dynStr.str, &endptr);
+            token->data.doubleVal = strtod(dynStr.str, NULL);
             g_lexerState.lineHasCode = true;
             strFree(&dynStr);
             return 0;
         }
-        case STATE_SLASH: {
-            if (znak == '/') {
+        case STATE_SLASH: { // recognize comments or divide
+            if (currChar == '/') {
                 currState = STATE_LINE_COMMENT;
-            } // stav pro radkovy komentar
-            else if (znak == '*') {
+            } // line comment
+            else if (currChar == '*') {
                 currState = STATE_BLOCK_COMMENT;
                 commentDepth = 1;
                 commentHasNewline = false;
             } else {
-                (void)ungetc(znak, stdin); // pretypovano na void kvuli clang tidy
+                (void)ungetc(currChar, stdin);
                 token->type = TOKEN_DIVIDE;
                 token->line = g_lexerState.currLine;
                 g_lexerState.lineHasCode = true;
@@ -550,17 +601,16 @@ int getToken(Token *token) {
             }
             break;
         }
-        case STATE_LINE_COMMENT: // radkovy komentar
-        {
-            if (znak == '\n') {
+        case STATE_LINE_COMMENT: {
+            if (currChar == '\n') {
                 spaceCount = 0;
-                if (g_lexerState.bracketCount > 0) { // jsme v zavorkach
+                if (g_lexerState.bracketCount > 0) { // inside brackets
                     g_lexerState.isNewLine = false;
                     g_lexerState.currLine++;
                     currState = STATE_START;
                     break;
                 }
-                g_lexerState.isNewLine = true; // nejsme v zavorkach
+                g_lexerState.isNewLine = true; // outside brackets
                 if (g_lexerState.lineHasCode) {
                     token->type = TOKEN_EOL;
                     token->line = g_lexerState.currLine;
@@ -568,20 +618,20 @@ int getToken(Token *token) {
                     g_lexerState.currLine++;
                     return 0;
                 }
-                g_lexerState.currLine++; // an radku je jen komentar
+                g_lexerState.currLine++; // comment only line, skip with no eol emit
                 currState = STATE_START;
                 break;
             }
-            if (znak == EOF) {
+            if (currChar == EOF) {
                 if (g_lexerState.bracketCount == 0 && g_lexerState.lineHasCode) {
                     token->type = TOKEN_EOL;
                     token->line = g_lexerState.currLine;
                     g_lexerState.lineHasCode = false;
                     g_lexerState.isNewLine = true;
-                    (void)ungetc(znak, stdin); // vratime eof pro samostatne zpracovani
+                    (void)ungetc(currChar, stdin); // push eof back for dedicated handling
                     return 0;
                 }
-                (void)ungetc(znak, stdin); // vratime eof pro samostatne zpracovani
+                (void)ungetc(currChar, stdin);
                 spaceCount = 0;
                 currState = STATE_PROCESS_INDENT;
                 break;
@@ -589,67 +639,66 @@ int getToken(Token *token) {
             currState = STATE_LINE_COMMENT;
             break;
         }
-        case STATE_ANGLE_BRACKET_LESSER: {
-            if (znak == '=') {
+        case STATE_ANGLE_BRACKET_LESSER: { // < or <=
+            if (currChar == '=') {
                 token->type = TOKEN_COMPARE_LESSER_EQUAL;
                 token->line = g_lexerState.currLine;
                 g_lexerState.lineHasCode = true;
                 return 0;
             }
-            (void)ungetc(znak, stdin); // pretypovano na void kvuli clang tidy
+            (void)ungetc(currChar, stdin);
             token->type = TOKEN_COMPARE_SMALLER_THAN;
             token->line = g_lexerState.currLine;
             g_lexerState.lineHasCode = true;
             return 0;
         }
-        case STATE_ANGLE_BRACKET_BIGGER: {
-            if (znak == '=') {
+        case STATE_ANGLE_BRACKET_BIGGER: { // > or >=
+            if (currChar == '=') {
                 token->type = TOKEN_COMPARE_BIGGER_EQUAL;
                 token->line = g_lexerState.currLine;
                 g_lexerState.lineHasCode = true;
                 return 0;
             }
-            (void)ungetc(znak, stdin); // pretypovano na void kvuli clang tidy
+            (void)ungetc(currChar, stdin);
             token->type = TOKEN_COMPARE_BIGGER_THAN;
             token->line = g_lexerState.currLine;
             g_lexerState.lineHasCode = true;
             return 0;
         }
-        case STATE_EQUAL: {
+        case STATE_EQUAL: { // = or ==
 
-            if (znak == '=') {
+            if (currChar == '=') {
                 token->type = TOKEN_EQUAL_TO;
                 token->line = g_lexerState.currLine;
                 g_lexerState.lineHasCode = true;
                 return 0;
             }
-            (void)ungetc(znak, stdin); // pretypovano na void kvuli clang tidy
+            (void)ungetc(currChar, stdin);
             token->type = TOKEN_EQUAL_SIGN;
             token->line = g_lexerState.currLine;
             g_lexerState.lineHasCode = true;
             return 0;
         }
-        case STATE_EXCLAMATION_MARK: {
-            if (znak == '=') {
+        case STATE_EXCLAMATION_MARK: { // only != is supported
+            if (currChar == '=') {
                 token->type = TOKEN_NOT_EQUAL_TO;
                 g_lexerState.lineHasCode = true;
                 token->line = g_lexerState.currLine;
                 return 0;
             }
-            (void)ungetc(znak, stdin); // pretypovano na void kvuli clang tidy
+            (void)ungetc(currChar, stdin);
 
             return lexicalError("unexpected '!', expected '!='");
         }
-        case STATE_LINE_BEG: {
-            if (znak == ' ') {
+        case STATE_LINE_BEG: { // count spaces in beggining of line
+            if (currChar == ' ') {
                 spaceCount++;
                 break;
             }
-            if (znak == '\t') // jedna se o prazdny radek
-            {
+            if (currChar == '\t') {
                 return lexicalError("tab character is not allowed for indentation");
             }
-            if (znak == '\n') // jedna se o prazdny radek
+            if (currChar == '\n') // empty line
             {
                 g_lexerState.currLine++;
                 g_lexerState.isNewLine = true;
@@ -657,84 +706,84 @@ int getToken(Token *token) {
                 currState = STATE_START;
                 break;
             }
-            if (znak == '/') {
-                currState = STATE_LINE_BEG_WITH_SLASH;
+            if (currChar == '/') {
+                currState = STATE_LINE_BEG_WITH_SLASH; // need to check what the next char is
                 break;
             }
-            if (znak == EOF) {
-                (void)ungetc(znak, stdin);
-                spaceCount = 0; // TODO: zkontrolovat validitu
+            if (currChar == EOF) {
+                (void)ungetc(currChar, stdin);
+                spaceCount = 0; // reset indent to zero
                 currState = STATE_PROCESS_INDENT;
                 break;
             }
-            // dostali jsme na vstup znak, jdeme zpracovat indent
+            // valid char found, need to process indent level
             currState = STATE_PROCESS_INDENT;
-            (void)ungetc(znak, stdin);
+            (void)ungetc(currChar, stdin);
             break;
         }
-        case STATE_LINE_BEG_WITH_SLASH: {
-            if (znak == '/') {
+        case STATE_LINE_BEG_WITH_SLASH: { // / encountered on empty line
+            if (currChar == '/') {
                 currState = STATE_LINE_COMMENT;
                 break;
             }
-            if (znak == '*') {
+            if (currChar == '*') {
                 currState = STATE_BLOCK_COMMENT;
                 commentDepth = 1;
                 commentHasNewline = false;
                 break;
             }
+            // standalone divide, gets emitted later
             g_lexerState.pendingDivide = true;
-            (void)ungetc(znak, stdin);
-            // jedna se o obycejne deleni, zpracujeme indent a vratime token pro deleni
+            (void)ungetc(currChar, stdin);
             currState = STATE_PROCESS_INDENT;
             break;
         }
-        case STATE_BLOCK_COMMENT: // jsme unitr blokoveho komentare
+        case STATE_BLOCK_COMMENT: // inside block comment
         {
-            if (znak == '\n') {
+            if (currChar == '\n') {
                 commentHasNewline = true;
                 g_lexerState.currLine++;
                 break;
             }
-            if (znak == '/') {
+            if (currChar == '/') {
                 currState = STATE_BLOCK_COMMENT_SLASH;
                 break;
             }
-            if (znak == '*') {
+            if (currChar == '*') {
                 currState = STATE_BLOCK_COMMENT_STAR;
                 break;
             }
-            if (znak == EOF) // ERROR
+            if (currChar == EOF) // ERROR
             {
                 return lexicalError("unterminated block comment");
             }
-            break; // jiny znak, pokracujeme v ignorovani
+            break; // other chars are ignored
         }
-        case STATE_BLOCK_COMMENT_SLASH: {
-            if (znak == '*') {
+        case STATE_BLOCK_COMMENT_SLASH: { // check for nested block comment
+            if (currChar == '*') {        // nested block comment
                 commentDepth++;
                 currState = STATE_BLOCK_COMMENT;
                 break;
             }
-            if (znak == '\n') {
+            if (currChar == '\n') {
                 commentHasNewline = true;
                 g_lexerState.currLine++;
                 currState = STATE_BLOCK_COMMENT;
                 break;
             }
-            if (znak == EOF) // ERROR
+            if (currChar == EOF) // ERROR
             {
                 return lexicalError("unterminated block comment");
             }
-            if (znak == '/') {
+            if (currChar == '/') {
                 currState = STATE_BLOCK_COMMENT_SLASH;
                 break;
             }
             currState = STATE_BLOCK_COMMENT;
             break;
         }
-        case STATE_BLOCK_COMMENT_STAR: {
-            if (znak == '/') {
+        case STATE_BLOCK_COMMENT_STAR: { // check for comment end
+            if (currChar == '/') {
                 commentDepth--;
                 if (commentDepth > 0) {
                     currState = STATE_BLOCK_COMMENT;
@@ -749,35 +798,34 @@ int getToken(Token *token) {
                 }
                 break;
             }
-            if (znak == '*') {
-                // zustavame
+            if (currChar == '*') {
+                // stay in state
                 break;
             }
-            if (znak == EOF) // ERROR
+            if (currChar == EOF) // ERROR
             {
                 return lexicalError("unterminated block comment");
             }
-            if (znak == '\n') {
+            if (currChar == '\n') {
                 commentHasNewline = true;
                 g_lexerState.currLine++;
                 currState = STATE_BLOCK_COMMENT;
                 break;
             }
-            // znak je jiny, zpet do blok. kom
             currState = STATE_BLOCK_COMMENT;
             break;
         }
-        case STATE_LINE_BEG_AFTER_BLOCK_COMMENT: // zacatek radku a zpracovany blokovy komentar
+        case STATE_LINE_BEG_AFTER_BLOCK_COMMENT: // line beg, processed block comment
         {
-            if (znak == ' ' || znak == '\t') {
+            if (currChar == ' ' || currChar == '\t') {
                 // ignore
                 break;
             }
-            if (znak == '/') {
+            if (currChar == '/') {
                 currState = STATE_LINE_BEG_WITH_SLASH;
                 break;
             }
-            if (znak == '\n') // prazdny radek
+            if (currChar == '\n') // empty line, ignore indent
             {
                 spaceCount = 0;
                 currState = STATE_LINE_BEG;
@@ -785,26 +833,26 @@ int getToken(Token *token) {
                 g_lexerState.currLine++;
                 break;
             }
-            if (znak == EOF) {
+            if (currChar == EOF) {
                 currState = STATE_START;
                 spaceCount = 0;
-                (void)ungetc(znak, stdin);
+                (void)ungetc(currChar, stdin);
                 break;
             }
-            // neni nic z predchozich -> mame znak -> resime indent
-            (void)ungetc(znak, stdin);
+            // normal code, process indent
+            (void)ungetc(currChar, stdin);
             currState = STATE_PROCESS_INDENT;
             break;
         }
         case STATE_PROCESS_INDENT: {
-
+            // calculates needed indent/ dedent tokens
             int topIndent = g_lexerState.indentStack[g_lexerState.stackCount - 1];
-            if (znak == EOF && topIndent == 0 && !g_lexerState.pendingDivide) {
+            if (currChar == EOF && topIndent == 0 && !g_lexerState.pendingDivide) { // process eof
                 token->type = TOKEN_EOF;
                 token->line = g_lexerState.currLine;
                 return 0;
             }
-            if (spaceCount > topIndent) {
+            if (spaceCount > topIndent) { // indent occured, emit indent
                 if (g_lexerState.stackCount >= MAX_INDENT_SIZE) {
                     return internalError("maximum indentation nesting depth exceeded");
                 }
@@ -813,40 +861,40 @@ int getToken(Token *token) {
                 g_lexerState.isNewLine = false;
                 token->type = TOKEN_INDENT;
                 token->line = g_lexerState.currLine;
-                (void)ungetc(znak, stdin);
+                (void)ungetc(currChar, stdin);
                 return 0;
-            } else if (spaceCount < topIndent) {
+            } else if (spaceCount < topIndent) { // dedent occured, emit dedent
                 int dedentsToEmit = 0;
                 while (g_lexerState.stackCount > 0 &&
                        g_lexerState.indentStack[g_lexerState.stackCount - 1] > spaceCount) {
                     g_lexerState.stackCount--;
-                    dedentsToEmit++;
+                    dedentsToEmit++; // multiple dedents must be emited
                 }
                 if (g_lexerState.indentStack[g_lexerState.stackCount - 1] != spaceCount) {
                     return lexicalError("inconsistent dedentation level");
                 }
                 g_lexerState.pendingDedents = dedentsToEmit - 1;
-                if (znak != EOF) {
+                if (currChar != EOF) {
                     g_lexerState.isNewLine = false;
                 }
                 token->type = TOKEN_DEDENT;
                 token->line = g_lexerState.currLine;
-                (void)ungetc(znak, stdin);
+                (void)ungetc(currChar, stdin);
                 return 0;
-            } else { // neni indent ani dedent
+            } else { // not indent nor dedent, continue from start
                 g_lexerState.isNewLine = false;
                 currState = STATE_START;
-                (void)ungetc(znak, stdin);
+                (void)ungetc(currChar, stdin);
                 break;
             }
         }
-        case STATE_AFTER_MULTILINE_BLOCK_COMMENT: // pokud je blokovy komentar na vic radku, nesmi
-                                                  // za nim nic nasledovat
+        case STATE_AFTER_MULTILINE_BLOCK_COMMENT: // if block comment on multiple lines, no code can
+                                                  // follow
         {
-            if (znak == ' ' || znak == '\t') {
-                break; // bily znak je v poradku
+            if (currChar == ' ' || currChar == '\t') {
+                break; // whitespace is okey
             }
-            if (znak == '\n') {
+            if (currChar == '\n') {
                 if (g_lexerState.bracketCount > 0) {
                     g_lexerState.isNewLine = false;
                     spaceCount = 0;
@@ -864,7 +912,7 @@ int getToken(Token *token) {
                     g_lexerState.currLine++;
 
                     return 0;
-                } else { // komentar je na prazdnych radcich, ignoruje se
+                } else { // comment on empty line is ignored, no eol emited
                     g_lexerState.lineHasCode = false;
                     g_lexerState.isNewLine = true;
                     spaceCount = 0;
@@ -873,9 +921,9 @@ int getToken(Token *token) {
                     break;
                 }
             }
-            if (znak == EOF) {
+            if (currChar == EOF) {
                 spaceCount = 0;
-                (void)ungetc(znak, stdin);
+                (void)ungetc(currChar, stdin);
                 if (g_lexerState.bracketCount == 0 && g_lexerState.lineHasCode) {
                     g_lexerState.lineHasCode = false;
                     g_lexerState.isNewLine = true;
@@ -886,17 +934,17 @@ int getToken(Token *token) {
                 currState = STATE_PROCESS_INDENT;
                 break;
             }
-            // jiny nez povoleny token, error
+            // any other char, error
             return lexicalError("unexpected token after multiline block comment");
         }
-        case STATE_AT_SIGN: {
-            if (isalnum(znak) || znak == '_') {
-                if (strAddChar(&dynStr, (char)znak) != 0) {
+        case STATE_AT_SIGN: { // @ processing
+            if (isalnum(currChar) || currChar == '_') {
+                if (strAddChar(&dynStr, (char)currChar) != 0) {
                     return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 break;
             }
-            (void)ungetc(znak, stdin);
+            (void)ungetc(currChar, stdin);
             if (strCompare(&dynStr, "main") == 0) {
                 strFree(&dynStr);
                 token->type = TOKEN_MAIN;
@@ -906,53 +954,53 @@ int getToken(Token *token) {
             }
             return lexicalErrorFree(&dynStr, "invalid annotation, only '@main' is allowed");
         }
-        case STATE_STRING_START: {
-            if (znak == '"') {
+        case STATE_STRING_START: { // " seen, need to determine if single or multiline string
+            if (currChar == '"') {
                 currState = STATE_STRING_SECOND_QUOTE;
                 break;
             }
-            if (znak == '\\') {
+            if (currChar == '\\') {
                 currState = STATE_STRING_ESCAPE_SEQUENCE;
                 break;
             }
-            if (znak == '\n' || znak == '\r' || znak == EOF) {
+            if (currChar == '\n' || currChar == '\r' || currChar == EOF) {
                 return lexicalErrorFree(&dynStr, "unterminated string literal");
             }
-            if (strAddChar(&dynStr, (char)znak) != 0) {
+            if (strAddChar(&dynStr, (char)currChar) != 0) {
                 return internalErrorFree(&dynStr, "memory allocation failed");
             }
             currState = STATE_STRING;
             break;
         }
-        case STATE_STRING_SECOND_QUOTE: {
-            if (znak == '"') {
+        case STATE_STRING_SECOND_QUOTE: { // ""
+            if (currChar == '"') {
                 currState = STATE_MULTILINE_STRING;
                 break;
             }
-            // nejde o uvozovku, takze mame prazdny jednoradkovy retezec
-            (void)ungetc(znak, stdin);
+            // empty string
+            (void)ungetc(currChar, stdin);
             return finishStringToken(token, &dynStr);
         }
         case STATE_STRING: {
-            if (znak == '"') { // konec stringu
+            if (currChar == '"') { // end of string
                 return finishStringToken(token, &dynStr);
             }
-            if (znak == '\\') {
-                currState = STATE_STRING_ESCAPE_SEQUENCE;
+            if (currChar == '\\') {
+                currState = STATE_STRING_ESCAPE_SEQUENCE; // escape sequence
                 break;
             }
-            if (znak == '\n' || znak == '\r' ||
-                znak == EOF) { // neni povoleno v ramci jednoradkoveho komentare
+            if (currChar == '\n' || currChar == '\r' ||
+                currChar == EOF) { // not allowed on single line string
                 return lexicalErrorFree(&dynStr, "unterminated string literal");
             }
-            if (strAddChar(&dynStr, (char)znak) != 0) {
+            if (strAddChar(&dynStr, (char)currChar) != 0) {
                 return internalErrorFree(&dynStr, "memory allocation failed");
             }
             break;
         }
-        case STATE_STRING_ESCAPE_SEQUENCE: { // escape sekvence
+        case STATE_STRING_ESCAPE_SEQUENCE: { // escape sequence
             char escapedChar;
-            switch (znak) { // podporovány jsou escape sekvence \\, \", \n, \r a \t.
+            switch (currChar) { // these are allowed:  \\, \", \n, \r a \t.
             case '\\':
                 escapedChar = '\\';
                 break;
@@ -968,7 +1016,7 @@ int getToken(Token *token) {
             case 't':
                 escapedChar = '\t';
                 break;
-            default: // nepodporovany znak
+            default: // unsupported char
                 return lexicalErrorFree(&dynStr, "invalid escape sequence in string literal");
             }
             if (strAddChar(&dynStr, escapedChar) != 0) {
@@ -977,84 +1025,83 @@ int getToken(Token *token) {
             currState = STATE_STRING;
             break;
         }
-        case STATE_MULTILINE_STRING: {
-            if (znak == EOF) { // neukonceny string
+        case STATE_MULTILINE_STRING: { // body of multiline string
+            if (currChar == EOF) {     // unterminated string
                 return lexicalErrorFree(&dynStr, "unterminated multiline string literal");
             }
-            if (znak == '"') {
+            if (currChar == '"') {
                 currState = STATE_MULTILINE_QUOTE1;
                 break;
             }
-            if (znak == '\n') {
+            if (currChar == '\n') {
                 g_lexerState.currLine++;
             }
-            if (strAddChar(&dynStr, (char)znak) != 0) {
+            if (strAddChar(&dynStr, (char)currChar) != 0) {
                 return internalErrorFree(&dynStr, "memory allocation failed");
             }
             break;
         }
 
-        case STATE_MULTILINE_QUOTE1: {
-            if (znak == EOF) {
+        case STATE_MULTILINE_QUOTE1: { // """ "
+            if (currChar == EOF) {
                 return lexicalErrorFree(&dynStr, "unterminated multiline string literal");
             }
-            if (znak == '"') {
+            if (currChar == '"') {
                 currState = STATE_MULTILINE_QUOTE2;
                 break;
             }
-            if (znak == '\n') {
+            if (currChar == '\n') {
                 g_lexerState.currLine++;
             }
             if (strAddChar(&dynStr, '"') != 0 ||
-                strAddChar(&dynStr, (char)znak) != 0) { // pridame uvozovku z predchoziho nacteni
+                strAddChar(&dynStr, (char)currChar) != 0) { // we add " from previous read
                 return internalErrorFree(&dynStr, "memory allocation failed");
             }
             currState = STATE_MULTILINE_STRING;
             break;
         }
         case STATE_MULTILINE_QUOTE2: {
-            if (znak == EOF) { // chyba
+            if (currChar == EOF) { // error
                 return lexicalErrorFree(&dynStr, "unterminated multiline string literal");
             }
-            if (znak == '"') {
-                currState = STATE_MULTILINE_END; // tri uvozovky za sebou, jdeme do posledniho stavu
+            if (currChar == '"') {
+                currState = STATE_MULTILINE_END; // three " in a row
                 break;
             }
-            if (znak == '\n') {
+            if (currChar == '\n') {
                 g_lexerState.currLine++;
             }
             if (strAddChar(&dynStr, '"') != 0 ||
-                strAddChar(&dynStr, '"') !=
-                    0 || // jiny znak, musime vratit predchozi nactene uvozovky a znak do stringu
-                strAddChar(&dynStr, (char)znak) != 0) {
+                strAddChar(&dynStr, '"') != 0 || // not end yet, return "" to the string
+                strAddChar(&dynStr, (char)currChar) != 0) {
                 return internalErrorFree(&dynStr, "memory allocation failed");
             }
             currState = STATE_MULTILINE_STRING;
             break;
         }
-        case STATE_MULTILINE_END: {
+        case STATE_MULTILINE_END: { // extra " are added to the string, otherwise finish it
 
-            if (znak == '"') {
+            if (currChar == '"') {
                 if (strAddChar(&dynStr, '"') != 0) {
                     return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 break;
             }
-            (void)ungetc(znak, stdin);
+            (void)ungetc(currChar, stdin);
             return finishStringToken(token, &dynStr);
         }
-        case STATE_PERIOD: {
-            if (znak >= '0' && znak <= '9') {
+        case STATE_PERIOD: { // check if just dot or .x number
+            if (currChar >= '0' && currChar <= '9') {
                 if (strInit(&dynStr) != 0) {
                     return internalError("memory allocation failed");
                 }
-                if (strAddChar(&dynStr, '.') != 0 || strAddChar(&dynStr, (char)znak) != 0) {
+                if (strAddChar(&dynStr, '.') != 0 || strAddChar(&dynStr, (char)currChar) != 0) {
                     return internalErrorFree(&dynStr, "memory allocation failed");
                 }
                 currState = STATE_DECIMAL_NUMBER;
                 break;
             }
-            (void)ungetc(znak, stdin);
+            (void)ungetc(currChar, stdin);
             token->type = TOKEN_PERIOD;
             token->line = g_lexerState.currLine;
             g_lexerState.lineHasCode = true;
