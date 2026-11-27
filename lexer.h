@@ -8,39 +8,37 @@
 
 #ifndef LEXER_H
 #define LEXER_H
-#include <stdbool.h>
-#include <stdio.h>
 
 #define KEYWORDS_COUNT 22
 
 enum automatState {
     STATE_START,
     STATE_IDENTIFIER,
-    STATE_FULL_NUMBER,                // koncovy
-    STATE_FULL_NUMBER_UNDERSCORE,     // nekoncovy
-    STATE_ZERO_NUMBER,                // koncovy
-    STATE_DECIMAL_POINT,              // nacetli jsme . cekame na cislo, jinak error
-    STATE_DECIMAL_NUMBER,             // koncovy
-    STATE_DECIMAL_NUMBER_UNDERSCORE,  // nekoncovy
-    STATE_EXPONENT_E,                 // nacetli jsme e, cekame na znamenko/cislo , neni koncovy
-    STATE_EXPONENT_SIGN,              // nacetli jsme e a znamenko
-    STATE_EXPONENT_NUMBER,            // cislo
-    STATE_EXPONENT_NUMBER_UNDERSCORE, // cislo
-    STATE_DOUBLE_SUFFIX,              // nacetli jsme d, konecny stav pro double
+    STATE_FULL_NUMBER,
+    STATE_FULL_NUMBER_UNDERSCORE,
+    STATE_ZERO_NUMBER,
+    STATE_DECIMAL_POINT,
+    STATE_DECIMAL_NUMBER,
+    STATE_DECIMAL_NUMBER_UNDERSCORE,
+    STATE_EXPONENT_E,
+    STATE_EXPONENT_SIGN,
+    STATE_EXPONENT_NUMBER,
+    STATE_EXPONENT_NUMBER_UNDERSCORE,
+    STATE_DOUBLE_SUFFIX,
 
     STATE_SLASH,
-    STATE_LINE_COMMENT, // radkovy komentar
+    STATE_LINE_COMMENT,
     STATE_ANGLE_BRACKET_LESSER,
     STATE_ANGLE_BRACKET_BIGGER,
     STATE_EQUAL,
     STATE_EXCLAMATION_MARK,
     STATE_LINE_BEG,
-    STATE_LINE_BEG_WITH_SLASH, // moznost vyskytu radkoveho komentare.pokud ano, -> prazdny radek
+    STATE_LINE_BEG_WITH_SLASH,
 
-    STATE_LINE_BEG_AFTER_BLOCK_COMMENT, // jsme na zacatku radku a mame detekovany blokovy komentar
-    STATE_BLOCK_COMMENT,                // uvnitr /*
-    STATE_BLOCK_COMMENT_SLASH,          // uvnitr /*   , dostanem /
-    STATE_BLOCK_COMMENT_STAR,           // uvnitr /*   , dostanem *
+    STATE_LINE_BEG_AFTER_BLOCK_COMMENT,
+    STATE_BLOCK_COMMENT,
+    STATE_BLOCK_COMMENT_SLASH,
+    STATE_BLOCK_COMMENT_STAR,
 
     STATE_PROCESS_INDENT,
     STATE_AFTER_MULTILINE_BLOCK_COMMENT,
