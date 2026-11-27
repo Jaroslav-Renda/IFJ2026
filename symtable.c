@@ -55,7 +55,7 @@ void symtableFree(Symtable *table) {
 /**
  * @brief Symtable hash func implemeted as sdbm
  * @param key key to be hashed
- * @return index on which our item is located in our array
+ * @return Hash for our item
  */
 static size_t symtableHashFunction(symtableKeyT key) {
     size_t hash = 0;
