@@ -128,6 +128,7 @@ static uint8_t appendFuncVar(
     SemanticContext *ctx, const char *origName, char *mangledName, dataType type, bool isMutable) {
     if (ctx == NULL || ctx->currentFunc == NULL || ctx->currentFunc->data.func.node == NULL) {
         free(mangledName);
+        errorInternal(0, "Invalid context or function node in appendFuncVar");
         return ERR_INTERNAL;
     }
 
@@ -135,6 +136,7 @@ static uint8_t appendFuncVar(
     FuncVarEntry *entry = calloc(1, sizeof(FuncVarEntry));
     if (entry == NULL) {
         free(mangledName);
+        errorInternal(0, "Memory allocation failed for FuncVarEntry");
         return ERR_INTERNAL;
     }
 
@@ -142,6 +144,7 @@ static uint8_t appendFuncVar(
     if (entry->origName == NULL) {
         free(mangledName);
         free(entry);
+        errorInternal(0, "Memory allocation failed for variable original name");
         return ERR_INTERNAL;
     }
 
@@ -170,6 +173,7 @@ static uint8_t appendFuncVar(
 static uint8_t addSingleBuiltin(Symtable *table, const BuiltinDef *def) {
     symtableItem *item = symtableLookupAdd(table, def->name);
     if (item == NULL) {
+        errorInternal(0, "Memory allocation failed for built-in function symbol");
         return ERR_INTERNAL;
     }
 
@@ -187,6 +191,7 @@ static uint8_t addSingleBuiltin(Symtable *table, const BuiltinDef *def) {
     if (def->paramCount > 0) {
         item->data.func.params = calloc(def->paramCount, sizeof(*item->data.func.params));
         if (item->data.func.params == NULL) {
+            errorInternal(0, "Memory allocation failed for built-in function parameters");
             return ERR_INTERNAL;
         }
         for (size_t i = 0; i < def->paramCount; i++) {
@@ -317,6 +322,7 @@ static uint8_t fillFuncParams(symtableItem *funcInTable, ASTNode *firstParam, si
 
     funcInTable->data.func.params = calloc(paramCnt, sizeof(*funcInTable->data.func.params));
     if (funcInTable->data.func.params == NULL) {
+        errorInternal(0, "Memory allocation failed for function parameters");
         return ERR_INTERNAL;
     }
 
@@ -325,6 +331,7 @@ static uint8_t fillFuncParams(symtableItem *funcInTable, ASTNode *firstParam, si
         /// Check for duplicate parameter names within the same function header -> Error 4
         for (size_t j = 0; j < i; j++) {
             if (strcmp(funcInTable->data.func.params[j].name, currParam->data.param.name) == 0) {
+                errorSemRedefinition(0, "Duplicate parameter name in function definition");
                 return ERR_SEM_REDEFINITION;
             }
         }
@@ -352,12 +359,14 @@ static uint8_t collectAllFunc(SemanticContext *ctx, ASTNode *functions) {
     while (curr != NULL) {
         /// Redefinition of an existing user or built-in function -> Error 4
         if (symtableFind(ctx->globalFuncTable, curr->data.funcDef.name) != NULL) {
+            errorSemRedefinition(0, "Redefinition of an existing function");
             return ERR_SEM_REDEFINITION;
         }
 
         symtableItem *funcInTable =
             symtableLookupAdd(ctx->globalFuncTable, curr->data.funcDef.name);
         if (funcInTable == NULL) {
+            errorInternal(0, "Memory allocation failed for function symbol");
             return ERR_INTERNAL;
         }
 
@@ -373,6 +382,7 @@ static uint8_t collectAllFunc(SemanticContext *ctx, ASTNode *functions) {
         char *mangledName =
             createMangledFuncName(curr->data.funcDef.name, curr->data.funcDef.isMain);
         if (mangledName == NULL) {
+            errorInternal(0, "Memory allocation failed for mangled function name");
             return ERR_INTERNAL;
         }
         // symtable and node share the same string thus are removed only in ast.c
@@ -389,13 +399,16 @@ static uint8_t collectAllFunc(SemanticContext *ctx, ASTNode *functions) {
         /// Enforce constraints for the @main entry function
         if (curr->data.funcDef.isMain) {
             if (mainExist) {
+                errorSemRedefinition(0, "Multiple @main entry functions defined");
                 return ERR_SEM_REDEFINITION; /// Error 4: Multiple @main entry functions
             }
             if (paramCnt != 0) {
+                errorSemArguments(0, "Function @main must not have parameters");
                 return ERR_SEM_ARGUMENTS; /// Error 5: @main must not have parameters
             }
             if (curr->data.funcDef.returnType != TYPE_UNKNOWN &&
                 curr->data.funcDef.returnType != TYPE_UNIT) {
+                errorSemType(0, "Function @main must return Unit");
                 return ERR_SEM_TYPE; /// Error 6: @main must return Unit
             }
             mainExist = true;
@@ -410,6 +423,7 @@ static uint8_t collectAllFunc(SemanticContext *ctx, ASTNode *functions) {
 
     /// Missing @main entry function in the program -> Error 3
     if (!mainExist) {
+        errorSemUndefined(0, "Missing @main entry function");
         return ERR_SEM_UNDEFINED;
     }
     return OK;
@@ -444,6 +458,7 @@ static uint8_t evaluateAddOp(
         left->convertToDouble = true;
         expr->semanticType = TYPE_DOUBLE;
     } else {
+        errorSemType(0, "Incompatible operand types for '+' operator");
         return ERR_SEM_TYPE;
     }
     return OK;
@@ -472,6 +487,7 @@ static uint8_t evaluateSubOp(
         left->convertToDouble = true;
         expr->semanticType = TYPE_DOUBLE;
     } else {
+        errorSemType(0, "Incompatible operand types for arithmetic operator");
         return ERR_SEM_TYPE;
     }
     return OK;
@@ -492,6 +508,7 @@ static uint8_t evaluateNonEqRelOp(
     ASTNode *expr, ASTNode *right, ASTNode *left, dataType rType, dataType lType, bool isCond) {
     /// Relational operators are only permitted inside conditions without BOOLTHEN
     if (!isCond) {
+        errorSemType(0, "Relational operator is only allowed inside a condition");
         return ERR_SEM_TYPE;
     }
     if (lType == TYPE_STRING && rType == TYPE_STRING) {
@@ -505,6 +522,7 @@ static uint8_t evaluateNonEqRelOp(
         }
         expr->semanticType = TYPE_BOOL;
     } else {
+        errorSemType(0, "Incompatible operand types for relational operator");
         return ERR_SEM_TYPE;
     }
     return OK;
@@ -524,6 +542,7 @@ static uint8_t evaluateNonEqRelOp(
 static uint8_t evaluateEq(
     ASTNode *expr, ASTNode *right, ASTNode *left, dataType rType, dataType lType, bool isCond) {
     if (!isCond) {
+        errorSemType(0, "Equality operator is only allowed inside a condition");
         return ERR_SEM_TYPE;
     }
     if (lType == rType && lType != TYPE_BOOL && lType != TYPE_UNKNOWN) {
@@ -541,6 +560,7 @@ static uint8_t evaluateEq(
         expr->semanticType = TYPE_BOOL;
         return OK;
     }
+    errorSemType(0, "Incompatible operand types for equality operator");
     return ERR_SEM_TYPE;
 }
 
@@ -581,6 +601,7 @@ static uint8_t evaluateBinOp(SemanticContext *ctx, ASTNode *expr, dataType *outT
     } else if (opType == OP_EQ || opType == OP_NEQ) {
         err = evaluateEq(expr, right, left, rType, lType, isCond);
     } else {
+        errorInternal(0, "Unknown binary operator");
         return ERR_INTERNAL;
     }
 
@@ -608,6 +629,7 @@ static uint8_t checkFunction(symtableItem *func, SemanticContext *ctx);
 static uint8_t evaluateFuncCall(SemanticContext *ctx, ASTNode *expr, dataType *outType) {
     symtableItem *func = symtableFind(ctx->globalFuncTable, expr->data.funcCall.funcName);
     if (func == NULL) {
+        errorSemUndefined(0, "Call to an undefined function");
         return ERR_SEM_UNDEFINED; /// Error 3: Calling an undefined function
     }
 
@@ -626,6 +648,7 @@ static uint8_t evaluateFuncCall(SemanticContext *ctx, ASTNode *expr, dataType *o
 
     /// 2. Verify argument count -> Error 5 on mismatch
     if (argCount != func->data.func.paramCount) {
+        errorSemArguments(0, "Wrong number of arguments in function call");
         return ERR_SEM_ARGUMENTS;
     }
 
@@ -633,6 +656,7 @@ static uint8_t evaluateFuncCall(SemanticContext *ctx, ASTNode *expr, dataType *o
     arg = expr->data.funcCall.args;
     for (size_t i = 0; i < argCount; i++) {
         if (!canAssignOrConvert(func->data.func.params[i].type, arg)) {
+            errorSemArguments(0, "Incompatible argument type in function call");
             return ERR_SEM_ARGUMENTS;
         }
         arg = arg->next;
@@ -653,6 +677,7 @@ static uint8_t evaluateFuncCall(SemanticContext *ctx, ASTNode *expr, dataType *o
             expr->data.funcCall.mangledName = dupCString(func->mangledName);
         }
         if (expr->data.funcCall.mangledName == NULL) {
+            errorInternal(0, "Memory allocation failed for mangled function call name");
             return ERR_INTERNAL;
         }
     }
@@ -686,11 +711,13 @@ static uint8_t evaluateLiteral(ASTNode *expr, dataType *outType) {
 static uint8_t evaluateVarRef(SemanticContext *ctx, ASTNode *expr, dataType *outType) {
     symtableItem *item = findVarInScopes(ctx->localScopeStack, expr->data.varRef.name);
     if (item == NULL) {
+        errorSemUndefined(0, "Use of an undefined variable");
         return ERR_SEM_UNDEFINED; /// Error 3: Undefined variable
     }
     if (expr->data.varRef.mangledName == NULL) {
         expr->data.varRef.mangledName = dupCString(item->mangledName);
         if (expr->data.varRef.mangledName == NULL) {
+            errorInternal(0, "Memory allocation failed for mangled variable reference name");
             return ERR_INTERNAL;
         }
     }
@@ -715,6 +742,7 @@ static uint8_t evaluateUnOp(SemanticContext *ctx, ASTNode *expr, dataType *outTy
         return err;
     }
     if (opType != TYPE_INT && opType != TYPE_DOUBLE) {
+        errorSemType(0, "Unary +/- operator requires numeric operand");
         return ERR_SEM_TYPE; /// Error 6: Unary +/- requires numeric operand
     }
     expr->semanticType = opType;
@@ -734,6 +762,7 @@ static uint8_t evaluateUnOp(SemanticContext *ctx, ASTNode *expr, dataType *outTy
 static uint8_t evaluateExpresion(
     SemanticContext *ctx, ASTNode *expr, dataType *outType, bool isCond) {
     if (expr == NULL) {
+        errorInternal(0, "NULL expression node");
         return ERR_INTERNAL;
     }
 
@@ -754,6 +783,7 @@ static uint8_t evaluateExpresion(
         return evaluateFuncCall(ctx, expr, outType);
 
     default:
+        errorSemOther(0, "Unsupported expression node type");
         return ERR_SEM_OTHER;
     }
 }
@@ -770,9 +800,9 @@ static uint8_t checkVarDecl(SemanticContext *ctx, ASTNode *decl) {
     Symtable *currScope = ctx->localScopeStack->symtable;
 
     /// Redefinition in the exact same block (or shadowing a function parameter in top body) ->
-    /// Error
-    /// 4
+    /// Error 4
     if (symtableFind(currScope, decl->data.varDecl.name) != NULL) {
+        errorSemRedefinition(0, "Redefinition of variable in the same scope");
         return ERR_SEM_REDEFINITION;
     }
 
@@ -789,6 +819,7 @@ static uint8_t checkVarDecl(SemanticContext *ctx, ASTNode *decl) {
     if (finalType == TYPE_UNKNOWN) {
         /// Type inference: cannot infer from unknown or store a Boolean without BOOLTHEN
         if (rightHandType == TYPE_BOOL || rightHandType == TYPE_UNKNOWN) {
+            errorSemType(0, "Cannot infer variable type from expression");
             return ERR_SEM_TYPE;
         }
         finalType = rightHandType;
@@ -796,12 +827,14 @@ static uint8_t checkVarDecl(SemanticContext *ctx, ASTNode *decl) {
     } else {
         /// Explicit type annotation: check compatibility (allows Int -> Double conversion)
         if (!canAssignOrConvert(finalType, decl->data.varDecl.initExpr)) {
+            errorSemType(0, "Incompatible type in variable initialization");
             return ERR_SEM_TYPE;
         }
     }
 
     symtableItem *var = symtableLookupAdd(currScope, decl->data.varDecl.name);
     if (var == NULL) {
+        errorInternal(0, "Memory allocation failed for variable symbol");
         return ERR_INTERNAL;
     }
 
@@ -809,6 +842,7 @@ static uint8_t checkVarDecl(SemanticContext *ctx, ASTNode *decl) {
         createMangledVarName(ctx->currentFunc->key, decl->data.varDecl.name, ctx->nextVarId);
     ctx->nextVarId++;
     if (mangled == NULL) {
+        errorInternal(0, "Memory allocation failed for mangled variable name");
         return ERR_INTERNAL;
     }
 
@@ -819,6 +853,7 @@ static uint8_t checkVarDecl(SemanticContext *ctx, ASTNode *decl) {
 
     decl->data.varDecl.mangledName = dupCString(mangled);
     if (decl->data.varDecl.mangledName == NULL) {
+        errorInternal(0, "Memory allocation failed for AST mangled variable name");
         return ERR_INTERNAL;
     }
 
@@ -842,9 +877,11 @@ static uint8_t checkVarDecl(SemanticContext *ctx, ASTNode *decl) {
 static uint8_t checkAssign(SemanticContext *ctx, ASTNode *assign) {
     symtableItem *var = findVarInScopes(ctx->localScopeStack, assign->data.assign.targetName);
     if (var == NULL) {
+        errorSemUndefined(0, "Assignment to an undefined variable");
         return ERR_SEM_UNDEFINED; /// Error 3: Assigning to an undefined variable
     }
     if (!var->data.var.isMutable) {
+        errorSemImmutable(0, "Attempt to write to an immutable variable or formal parameter");
         return ERR_SEM_IMMUTABLE; /// Error 7: Assigning to a 'val' or formal parameter
     }
 
@@ -855,11 +892,13 @@ static uint8_t checkAssign(SemanticContext *ctx, ASTNode *assign) {
     }
 
     if (!canAssignOrConvert(var->data.var.type, assign->data.assign.expr)) {
+        errorSemType(0, "Incompatible type in assignment");
         return ERR_SEM_TYPE; /// Error 6: Incompatible type in assignment
     }
     if (assign->data.assign.mangledName == NULL) {
         assign->data.assign.mangledName = dupCString(var->mangledName);
         if (assign->data.assign.mangledName == NULL) {
+            errorInternal(0, "Memory allocation failed for mangled assignment target name");
             return ERR_INTERNAL;
         }
     }
@@ -883,6 +922,7 @@ static uint8_t checkReturn(SemanticContext *ctx, ASTNode *ret) {
     /// Rule (Sec. 2.3): A function containing 'return' MUST have an explicit return type in its
     /// header
     if (!func->data.func.hasExplicitReturnType) {
+        errorSemType(0, "Return statement used in a function without explicit return type");
         return ERR_SEM_TYPE;
     }
 
@@ -892,6 +932,7 @@ static uint8_t checkReturn(SemanticContext *ctx, ASTNode *ret) {
     /// Bare 'return' without an expression is only valid in a function explicitly returning Unit
     if (expr == NULL) {
         if (retType != TYPE_UNIT) {
+            errorSemType(0, "Empty return statement in a function not returning Unit");
             return ERR_SEM_TYPE;
         }
         func->data.func.hasReturnStmt = true;
@@ -909,9 +950,11 @@ static uint8_t checkReturn(SemanticContext *ctx, ASTNode *ret) {
     /// the expression and discards its value (unless it is an invalid Boolean expression)
     if (retType == TYPE_UNIT) {
         if (exprType == TYPE_BOOL) {
+            errorSemType(0, "Cannot return a boolean expression");
             return ERR_SEM_TYPE;
         }
     } else if (!canAssignOrConvert(retType, expr)) {
+        errorSemType(0, "Incompatible type in return statement");
         return ERR_SEM_TYPE;
     }
 
@@ -937,6 +980,7 @@ static uint8_t checkIfStmt(SemanticContext *ctx, ASTNode *stmt) {
     }
 
     if (condType != TYPE_BOOL) {
+        errorSemType(0, "Condition in 'if' statement is not a relational expression");
         return ERR_SEM_TYPE; /// Error 6: Condition is not a relational expression
     }
 
@@ -970,6 +1014,7 @@ static uint8_t checkWhileStmt(SemanticContext *ctx, ASTNode *stmt) {
     }
 
     if (condType != TYPE_BOOL) {
+        errorSemType(0, "Condition in 'while' statement is not a relational expression");
         return ERR_SEM_TYPE; /// Error 6: Condition is not a relational expression
     }
 
@@ -1036,6 +1081,7 @@ static uint8_t checkBlock(SemanticContext *ctx, ASTNode *block) {
     /// Create and push a new symbol table for this block's lexical scope (prime capacity 37)
     Symtable *scope = symtableInit(37);
     if (scope == NULL) {
+        errorInternal(0, "Memory allocation failed for block symbol table");
         return ERR_INTERNAL;
     }
     push(scope, &ctx->localScopeStack);
@@ -1136,6 +1182,7 @@ static uint8_t checkFunctionTail(ASTNode *body, symtableItem *func, bool *outAll
             *outType = TYPE_UNIT;
             return OK;
         }
+        errorSemType(0, "Invalid if-else statement at the end of a function");
         return ERR_SEM_TYPE; /// Error 6: Invalid if-else at the end of a function
     }
 
@@ -1176,21 +1223,25 @@ static uint8_t checkFuncReturn(symtableItem *func, ASTNode *funcNode) {
         /// discarded
         if (func->data.func.returnType == TYPE_UNIT) {
             if (outType == TYPE_BOOL) {
+                errorSemType(0, "Invalid boolean expression at the end of a Unit function");
                 return ERR_SEM_TYPE;
             }
             return OK;
         }
         /// Function explicitly returns Int/Double/String -> must end with a compatible expression
         if (lastExpr == NULL || !canAssignOrConvert(func->data.func.returnType, lastExpr)) {
+            errorSemType(0, "Function body does not end with a compatible return expression");
             return ERR_SEM_TYPE;
         }
     } else {
         /// Return type was omitted -> infer it from the last statement in the body
         if (outType == TYPE_BOOL || outType == TYPE_UNKNOWN) {
+            errorSemType(0, "Cannot infer function return type");
             return ERR_SEM_TYPE;
         }
         /// If @main had no explicit return type, its inferred return type must still be Unit
         if (func->data.func.isMain && outType != TYPE_UNIT) {
+            errorSemType(0, "Inferred return type of @main must be Unit");
             return ERR_SEM_TYPE;
         }
         func->data.func.returnType = outType;
@@ -1219,6 +1270,7 @@ static uint8_t checkFunction(symtableItem *func, SemanticContext *ctx) {
     /// Detect direct or mutual recursion: recursive functions MUST have an explicit return type
     if (func->data.func.beingEvaluated) {
         if (!func->data.func.hasExplicitReturnType) {
+            errorSemType(0, "Recursive function must have an explicit return type");
             return ERR_SEM_TYPE; /// Error 6
         }
         return OK;
@@ -1251,6 +1303,7 @@ static uint8_t checkFunction(symtableItem *func, SemanticContext *ctx) {
         ctx->localScopeStack = prevStack;
         ctx->varListTail = prevFuncTail;
         ctx->nextVarId = prevVarId;
+        errorInternal(0, "Memory allocation failed for function scope symbol table");
         return ERR_INTERNAL;
     }
     push(scope, &ctx->localScopeStack);
@@ -1261,6 +1314,7 @@ static uint8_t checkFunction(symtableItem *func, SemanticContext *ctx) {
     for (size_t i = 0; i < func->data.func.paramCount; i++) {
         symtableItem *paramVar = symtableLookupAdd(scope, func->data.func.params[i].name);
         if (paramVar == NULL) {
+            errorInternal(0, "Memory allocation failed for parameter symbol");
             err = ERR_INTERNAL;
             break;
         }
@@ -1268,6 +1322,7 @@ static uint8_t checkFunction(symtableItem *func, SemanticContext *ctx) {
             createMangledVarName(func->key, func->data.func.params[i].name, ctx->nextVarId);
         ctx->nextVarId++;
         if (paramMangled == NULL) {
+            errorInternal(0, "Memory allocation failed for mangled parameter name");
             err = ERR_INTERNAL;
             break;
         }
@@ -1285,6 +1340,7 @@ static uint8_t checkFunction(symtableItem *func, SemanticContext *ctx) {
         if (currParam != NULL) {
             currParam->data.param.mangledName = dupCString(paramMangled);
             if (currParam->data.param.mangledName == NULL) {
+                errorInternal(0, "Memory allocation failed for AST mangled parameter name");
                 err = ERR_INTERNAL;
                 break;
             }
@@ -1331,6 +1387,7 @@ static uint8_t checkFunction(symtableItem *func, SemanticContext *ctx) {
  */
 uint8_t semantAnalyse(ASTNode *program) {
     if (program == NULL || program->type != NODE_PROGRAM) {
+        errorInternal(0, "Invalid program AST root node");
         return ERR_INTERNAL;
     }
 
@@ -1343,6 +1400,7 @@ uint8_t semantAnalyse(ASTNode *program) {
         .nextVarId = 0,
     };
     if (ctx.globalFuncTable == NULL) {
+        errorInternal(0, "Memory allocation failed for global function table");
         return ERR_INTERNAL;
     }
 
@@ -1357,6 +1415,7 @@ uint8_t semantAnalyse(ASTNode *program) {
     while (err == OK && curr != NULL) {
         symtableItem *func = symtableFind(ctx.globalFuncTable, curr->data.funcDef.name);
         if (func == NULL) {
+            errorInternal(0, "Function missing from global function table");
             return ERR_INTERNAL;
         }
         err = checkFunction(func, &ctx);
