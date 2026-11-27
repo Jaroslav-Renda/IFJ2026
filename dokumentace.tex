@@ -3,13 +3,16 @@
 % --- BASIC SETTINGS & LANGUAGE ---
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
-\usepackage[czech]{babel}
+\usepackage[czech, shorthands=off]{babel}
 \usepackage{multicol}
-
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{float}
+\usepackage{amsmath}
 % --- TABLES ---
 \usepackage{booktabs}
 \usepackage{tabularx}
-
+\usepackage{longtable}
+\usepackage{array}
 % --- IMAGE HANDLING ---
 \usepackage{graphicx}
 
@@ -17,14 +20,16 @@
 \usepackage[hidelinks]{hyperref}
 
 % --- DOCUMENT INFORMATION ---
-\title{Dokumentace k projektu z předmětu IFJ \\[0.5em] \large VUT FIT \\[0.4em]
+\title{Dokumentace k projektu z předmětu IFJ \\[0.7em] \large VUT FIT \\[0.4em]
 \normalsize Varianta: TRP-izp} 
 \author{Autoři a rozdělení bodů:\\[0.5em]
-\textbf{Jaroslav Renda (xrendaj00) --- 25\%}\\
-Jakub Ženata (xzenatj00) --- 25\%\\
-Jakub Poláček (xpolacj00) --- 25\%\\
-Petr Mácha (xmachap00) --- 25\%\\[1em]
+\textbf{Jaroslav Renda (xrendaj00, 281 844) --- 25\%}\\
+Jakub Ženata (xzenatj00, 281 797) --- 25\%\\
+Jakub Poláček (xpolacj00, 281 747) --- 25\%\\
+Petr Mácha (xmachap00, 282 748) --- 25\%\\[1em]
+Implementovaná rozšíření: FUNEXP\\
 Repozitář: \url{https://github.com/Jaroslav-Renda/IFJ2026}}
+
 \date{\today}
 
 \begin{document}
@@ -38,7 +43,7 @@ Repozitář: \url{https://github.com/Jaroslav-Renda/IFJ2026}}
 
 
 % --- CHAPTERS ---
-
+\newpage
 \section{Rozdělení práce}
 
 Jaroslav Renda -- Vedoucí týmu, syntaktická analýza, precedenční tabulka, návrh LL1 gramatiky, testování, precedenční zásobník
@@ -48,23 +53,249 @@ Jaroslav Renda -- Vedoucí týmu, syntaktická analýza, precedenční tabulka, 
 
 
 \section{Spolupráce v týmu} 
-Spolupráce v týmu probíhala hladce, na začátku semestru proběhla první fyzická schůze kde jsme si domluvili formální záležitosti a rozdělili práci.
-Taky jsme se dohodli na vedoucím projektu a občasných schůzkách. Poté již komunikace probíhala online formou přes Discord.
-Pro verzování kódu jsme využili Github. Nový kód byl přidáván do vlastní větve, do hlavní větve se dostal jen zkontrolovaný kód.
-Pro formátování kódu jsme využili editorconfig a clang-format, názvy proměnných jsou v camelCasu a v celý kód je v angličtině.
+Spolupráce v týmu probíhala hladce, na začátku semestru proběhla první fyzická schůze, kde jsme si domluvili formální záležitosti a rozdělili práci.
+Také jsme se dohodli na vedoucím projektu a občasných schůzkách. Poté již komunikace probíhala online formou přes Discord. Ta se nejčastěji týkala domluvy rozhraní projektu. Termín dokončení projektu jsme nastavili na den pokusného odevzdání, což se však nepodařilo plně dodržet, a projekt byl plně funkční až při termínu druhého pokusného odevzdání. 
+Pro verzování kódu jsme využili GitHub. Nový kód byl přidáván do vlastní větve, ve které vždy proběhla kontrola bugů od jiného člena týmu a do hlavní větve se pomocí pull requestů vkládal jen zkontrolovaný a otestovaný kód.
+Pro formátování kódu jsme využili \texttt{editorconfig} a \texttt{clang-format}, názvy proměnných jsou v notaci \texttt{camelCase} a celý kód včetně komentářů je v angličtině.
 
+\section{Testování} 
+Testování probíhalo v jednotlivých částech projektu formou unit testů, pro celkové testování jsme si nechali vygenerovat testy od umělé inteligence. Také jsme využili obě pokusná odevzdání projektu.
+Při prvním pokusném odevzdání ještě nebyla dodělána tvorba AST v parseru, z toho důvodu se podařilo otestovat jen lexikální a syntaktickou analýzu. U druhého pokusného odevzdání už byl projekt funkční, a prošla většina testů.
+\newpage
 \section{Blokové schéma} 
-
+\begin{figure}[htbp]
+    \centering
+\includegraphics[width=0.8\textwidth]{blokoveSchema.png}
+\caption{Blokové schéma}
+    \label{fig:blokoveschema}
+\end{figure}
+\subsection*{Popis blokového schéma}
+Překladač začíná v počáteční funkci \texttt{main}, která inicializuje stav lexikálního analyzátoru a vytvoří kořen abstraktního syntaktického stromu. Spouští jednotlivé moduly a předává jim tento strom podle principu dvouprůchodové analýzy. Počátek syntaktické analýzy začíná voláním funkce \texttt{parseProg()}, která spustí rekurzivní sestup. Podle principu syntaxí řízeného překladu syntaktická analýza postupně přijímá jednotlivé tokeny z lexikální analýzy skrz funkci \texttt{getToken()} a postupně sestavuje strom. Po úspěšném průchodu celého vstupního programu předá vytvořený strom sémantickému analyzátoru, skrz funkci \texttt{semantAnalyse()}, který nad celým stromem provede sémantickou analýzu a připraví strom pro generátor. Jako poslední krok generátor cílového kódu převezme připravený strom, zavoláním funkce \texttt{codegenStart()} ho znovu projde a podle jeho struktury vygeneruje výsledný kód a vypíše ho na standardní výstup.
+\newpage
 \section{Diagram automatu}
-
+\begin{figure}[htbp]
+    \centering
+\includegraphics[width=\textwidth]{FSM}
+\caption{Stavový automat, koncové stavy jsou vybarveny modře}
+    \label{fig:FSM}
+\end{figure}
+\newpage
+\subsection*{Popis odchylek od čistého konečného automatu}
+Lexikální analýza je v principu navržena podle stavového automatu na obrázku, v některých ohledech se však realizace liší. První z nich je zpracování odsazení na začátku řádku. To je řešeno pomocí speciálního stavu \texttt{LINE\_BEG}, do kterého lexer přejde v případě, že se nachází na začátku řádku mimo závorky. V tomto stavu se počítají mezery, případně se přeskakují prázdné řádky pomocí příznaku \texttt{lineHasCode}. Při prvním validním znaku přejde lexer do stavu pro výpočet zanoření, který je realizován pomocí zásobníku s hodnotami počtu mezer jednotlivých bloků. Lexer v případě, že došlo ke zvýšení či snížení velikosti zanoření vrací token \texttt{INDENT} či \texttt{DEDENT}, se kterým dále pracuje syntaktická analýza. Případně skončí s chybovou hodnotou 1, pokud úroveň odsazení nesedí. 
+V případě, že skončí více odsazených bloků za sebou, si lexer uloží počet těchto ukončených odsazení do proměnné \texttt{pendingDedents}, a ty na začátku volání funkce \texttt{getToken} vrací.
+Další odlišnost je ve zpracování identifikátorů a klíčových slov. Při načtení identifikátoru se zavolá funkce \texttt{checkForKeyword}, která zkontroluje, jestli se nejedná o jedno z 22 klíčových slov, a případně vrátí místo \texttt{TOKEN\_IDENTIFIER} \texttt{TOKEN\_KEYWORD}. 
+Realizace se od automatu liší také při zpracování zanořených blokových komentářů, při kterých počítá velikost zanoření a kontroluje se, zda obsahoval blokový komentář znak nového řádku. V tomto případě se po jeho zpracování vrací \texttt{TOKEN\_EOL}, a probíhá kontrola, že za blokovým komentářem do konce řádku není další kód.
+Lexer je od stavového automatu odlišný také tím, že počítá množství otevřených závorek, pomocí kterého ví, jestli se nachází uvnitř závorek. V tomto případě lexer při nalezení konce řádku tento token nevrací, a také se nepočítá úroveň odsazení. Při zpracovávání čísel lexer přijímá znak \_ tam, kde je to povoleno, ale do finálního čísla se neukládá.
+\newpage
 \section{LL tabulka}
-
+{
+\scriptsize
+\begin{longtable}{|r|>{\raggedright\arraybackslash}p{0.35\textwidth}|>{\raggedright\arraybackslash}p{0.52\textwidth}|}
+\caption{Tabulka pravidel a jejich množiny PREDICT()}\\
+\hline
+\textbf{\#} & \textbf{PREDICT()} & \textbf{Pravidlo} \\
+\hline
+\endfirsthead
+\hline
+\textbf{\#} & \textbf{PREDICT()} & \textbf{Pravidlo} \\
+\hline
+\endhead
+\hline
+\endfoot
+    1  & \{import\} & <PROG> $\Rightarrow$ IMPORT ifj26 . * EOL <FOO-LIST> EOF \\
+    2  & \{@main, def\} & <FOO-LIST> $\Rightarrow$ <FOO-DEC> <FOO-LIST> \\
+    3  & \{EOF\} & <FOO-LIST> $\Rightarrow$ e \\
+    4  & \{@main\} & <FOO-DEC> $\Rightarrow$ @main <OPT-EOL> def id ( <OPT-EOL> <PARAMS> ) <OPT-TYPE> = <FOO-BODY> \\
+    5  & \{def\} & <FOO-DEC> $\Rightarrow$ def id ( <OPT-EOL> <PARAMS> ) <OPT-TYPE> = <FOO-BODY> \\
+    6  & \{EOL\} & <OPT-EOL> $\Rightarrow$ EOL \\
+    7  & \{def, ), id, :, int, double, string, unit, ,, val, var, return, <EXP>, if, while, dedent\} & <OPT-EOL> $\Rightarrow$ e \\
+    8  & \{)\} & <PARAMS> $\Rightarrow$ e \\
+    9  & \{id\} & <PARAMS> $\Rightarrow$ id <OPT-EOL> : <OPT-EOL> <TYPE> <OPT-EOL> <NEXT-PARAM> \\
+    10 & \{)\} & <NEXT-PARAM> $\Rightarrow$ e \\
+    11 & \{,\} & <NEXT-PARAM> $\Rightarrow$ , <AFTER-COM> \\
+    12 & \{id\} & <AFTER-COM> $\Rightarrow$ id <OPT-EOL> : <OPT-EOL> <TYPE> <OPT-EOL> <NEXT-PARAM> \\
+    13 & \{EOL\} & <AFTER-COM> $\Rightarrow$ EOL <PARAMS> \\
+    14 & \{EOL\} & <FOO-BODY> $\Rightarrow$ EOL <BLOCK> \\
+    15 & \{id, !a, /, *, -, +, <, <=, >=, >, ==, !=, (, ), ,, literál, \$\} & <FOO-BODY> $\Rightarrow$ <EXP> EOL \\
+    16 & \{indent\} & <BLOCK> $\Rightarrow$ Indent <ST-LIST> Dedent \\
+    17 & \{val, var, return, \{<EXP>\}\} & <ST-LIST> $\Rightarrow$ <STAT> <ST-NEXT> \\
+    18 & \{if, while\} & <ST-LIST> $\Rightarrow$ <BLOCK-STAT> <ST-REST> \\
+    19 & \{EOL\} & <ST-NEXT> $\Rightarrow$ EOL <ST-REST> \\
+    20 & \{;\} & <ST-NEXT> $\Rightarrow$ ; <OPT-EOL> <ST-REST> \\
+    21 & \{dedent\} & <ST-REST> $\Rightarrow$ e \\
+    22 & \{val, var, return, \{<EXP>\}\} & <ST-REST> $\Rightarrow$ <STAT> <ST-NEXT> \\
+    23 & \{if, while\} & <ST-REST> $\Rightarrow$ <BLOCK-STAT> <ST-REST> \\
+    24 & \{val\} & <STAT> $\Rightarrow$ val id <OPT-TYPE> = <EXP> \\
+    25 & \{var\} & <STAT> $\Rightarrow$ var id <OPT-TYPE> = <EXP> \\
+    26 & \{!a, /, *, -, +, <, <=, >=, >, ==, !=, (, ), ,, literál, \$\} & <STAT> $\Rightarrow$ <EXP> \\
+    27 & \{id\} & <STAT> $\Rightarrow$ id <ST-AFTER-ID> \\
+    28 & \{return\} & <STAT> $\Rightarrow$ return <RET-VAL> \\
+    29 & \{if\} & <BLOCK-STAT> $\Rightarrow$ if <EXP> then EOL <BLOCK> else EOL <BLOCK> \\
+    30 & \{while\} & <BLOCK-STAT> $\Rightarrow$ while <EXP> do EOL <BLOCK> \\
+    31 & \{EOL, ;\} & <RET-VAL> $\Rightarrow$ e \\
+    32 & \{id, !a, /, *, -, +, <, <=, >=, >, ==, !=, (, ), ,, literál, \$\} & <RET-VAL> $\Rightarrow$ <EXP> \\
+    33 & \{:\} & <OPT-TYPE> $\Rightarrow$ : <TYPE> \\
+    34 & \{=\} & <OPT-TYPE> $\Rightarrow$ e \\
+    35 & \{int\} & <TYPE> $\Rightarrow$ int \\
+    36 & \{double\} & <TYPE> $\Rightarrow$ double \\
+    37 & \{string\} & <TYPE> $\Rightarrow$ string \\
+    38 & \{unit\} & <TYPE> $\Rightarrow$ Unit \\
+    39 & \{=\} & <ST-AFTER-ID> $\Rightarrow$ = <EXP> \\
+    40 & \{id, !a, /, *, -, +, <, <=, >=, >, ==, !=, (, ), ,, literál, \$\} & <ST-AFTER-ID> $\Rightarrow$ <EXP> [musí dostat i 1 token v historii] \\
+\end{longtable}
+}
+\newcommand{\rot}[1]{\rotatebox{90}{\texttt{#1}\hspace{2pt}}}
+{
+\tiny
+\begin{table}[H]
+\centering
+\caption{LL(1) tabulka}
+\label{tab:ll-table}
+\renewcommand{\arraystretch}{1.25}
+\setlength{\tabcolsep}{3.5pt}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{|l|*{24}{c|}}
+\hline
+ & \rot{"import"} & \rot{"@main"} & \rot{"def"} & \rot{"EOF"} & \rot{"EOL"} & \rot{")"} & \rot{"id"} & \rot{","} & \rot{"indent"} & \rot{"dedent"} & \rot{"val"} & \rot{"var"} & \rot{"return"} & \rot{"if"} & \rot{"while"} & \rot{";"} & \rot{":"} & \rot{"="} & \rot{"int"} & \rot{"double"} & \rot{"unit"} & \rot{"string"} & \rot{"exp*"} & \rot{"exp**"} \\
+\hline
+\texttt{<PROG>}        & 1 &   &   &   &    &    &    &    &    &    &    &    &    &    &    &    &    &    &    &    &    &    &    &    \\ \hline
+\texttt{<FOO-LIST>}    &   & 2 & 2 & 3 &    &    &    &    &    &    &    &    &    &    &    &    &    &    &    &    &    &    &    &    \\ \hline
+\texttt{<FOO-DEC>}     &   & 4 & 5 &   &    &    &    &    &    &    &    &    &    &    &    &    &    &    &    &    &    &    &    &    \\ \hline
+\texttt{<OPT-EOL>}     &   &   & 7 &   & 6  & 7  & 7  & 7  &    & 7  & 7  & 7  & 7  & 7  & 7  &    & 7  &    & 7  & 7  & 7  & 7  & 7  &    \\ \hline
+\texttt{<PARAMS>}      &   &   &   &   &    & 8  & 9  &    &    &    &    &    &    &    &    &    &    &    &    &    &    &    &    &    \\ \hline
+\texttt{<NEXT-PARAM>}  &   &   &   &   &    & 10 &    & 11 &    &    &    &    &    &    &    &    &    &    &    &    &    &    &    &    \\ \hline
+\texttt{<AFTER-COM>}   &   &   &   &   & 13 &    & 12 &    &    &    &    &    &    &    &    &    &    &    &    &    &    &    &    &    \\ \hline
+\texttt{<FOO-BODY>}    &   &   &   &   & 14 &    &    &    &    &    &    &    &    &    &    &    &    &    &    &    &    &    & 15 &    \\ \hline
+\texttt{<BLOCK>}       &   &   &   &   &    &    &    &    & 16 &    &    &    &    &    &    &    &    &    &    &    &    &    &    &    \\ \hline
+\texttt{<ST-LIST>}     &   &   &   &   &    &    &    &    &    &    & 17 & 17 & 17 & 18 & 18 &    &    &    &    &    &    &    & 17 &    \\ \hline
+\texttt{<ST-NEXT>}     &   &   &   &   & 19 &    &    &    &    &    &    &    &    &    &    & 20 &    &    &    &    &    &    &    &    \\ \hline
+\texttt{<ST-REST>}     &   &   &   &   &    &    &    &    &    & 21 & 22 & 22 & 22 & 23 & 23 &    &    &    &    &    &    &    & 22 &    \\ \hline
+\texttt{<STAT>}        &   &   &   &   &    &    & 27 &    &    &    & 24 & 25 & 28 &    &    &    &    &    &    &    &    &    &    & 26 \\ \hline
+\texttt{<BLOCK-STAT>}  &   &   &   &   &    &    &    &    &    &    &    &    &    & 29 & 30 &    &    &    &    &    &    &    &    &    \\ \hline
+\texttt{<RET-VAL>}     &   &   &   &   & 31 &    &    & 31 &    &    &    &    &    &    &    & 31 &    &    &    &    &    &    & 32 &    \\ \hline
+\texttt{<OPT-TYPE>}    &   &   &   &   &    &    &    &    &    &    &    &    &    &    &    &    & 33 & 34 &    &    &    &    &    &    \\ \hline
+\texttt{<TYPE>}        &   &   &   &   &    &    &    &    &    &    &    &    &    &    &    &    &    &    & 35 & 36 & 38 & 37 &    &    \\ \hline
+\texttt{<ST-AFTER-ID>} &   &   &   &   &    &    &    &    &    &    &    &    &    &    &    &    &    & 39 &    &    &    &    & 40 &    \\ \hline
+\end{tabular}%
+}
+\vspace{4pt}
+\begin{flushleft}
+\footnotesize
+$^*$ značí množinu FIRST() výrazů, tedy tokeny, kterými začíná výraz, v tomto místě dochází k přechodu do precedenční analýzy. \\
+$^{**}$ značí množinu FIRST() výrazů, ale s výjimkou tokenu pro identifikátor, tato výjimka je pro rozlišení volání funkce od identifikátoru.
+\end{flushleft}
+\end{table}
+}
+% -- precedencka -- %
+\newpage
 \section{Precedenční tabulka}   
-
+\begin{table}[!htbp]
+  \centering
+  \caption{Pravidla pro precedenční analýzu}
+  \label{tab:prec-pravidla}
+  \renewcommand{\arraystretch}{1.15}
+  \begin{tabular}{r l @{\hspace{2.5em}} r l}
+    \hline
+    \textbf{\#} & \textbf{Pravidlo} & \textbf{\#} & \textbf{Pravidlo} \\
+    \hline
+    1.  & $E \Rightarrow i$           & 10. & $E \Rightarrow E \ge E$ \\
+    2.  & $E \Rightarrow \text{literal}$ & 11. & $E \Rightarrow E > E$ \\
+    3.  & $E \Rightarrow !E$          & 12. & $E \Rightarrow E == E$ \\
+    4.  & $E \Rightarrow E / E$       & 13. & $E \Rightarrow E != E$ \\
+    5.  & $E \Rightarrow E * E$       & 14. & $E \Rightarrow (E)$ \\
+    6.  & $E \Rightarrow E - E$       & 15. & $E \Rightarrow E , E$ \\
+    7.  & $E \Rightarrow E + E$       & 16. & $E \Rightarrow i()$ \\
+    8.  & $E \Rightarrow E < E$       & 17. & $E \Rightarrow i(E)$ \\
+    9.  & $E \Rightarrow E \le E$     & 18. & $E \Rightarrow ()$ \\
+    \hline
+  \end{tabular}
+\end{table}
+\begin{table}[!htbp]
+  \centering
+  \caption{Precedenční tabulka}
+  \label{tab:precedencni}
+  \renewcommand{\arraystretch}{1.2}
+  \setlength{\tabcolsep}{4pt}
+  \resizebox{\textwidth}{!}{%
+    \begin{tabular}{|l|*{17}{c|}}
+      \hline
+      & \textbf{id} & \textbf{!a} & \textbf{/} & \textbf{*} & \textbf{-} & \textbf{+} & \textbf{$<$} & \textbf{$<=$} & \textbf{$>=$} & \textbf{$>$} & \textbf{==} & \textbf{!=} & \textbf{(} & \textbf{)} & \textbf{,} & \textbf{literál} & \textbf{\$} \\
+      \hline
+      \textbf{id}      &     &     & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ & $=$ & $>$ & $>$ &     & $>$ \\ \hline
+      \textbf{!a}      & $<$ & $<$ & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ & $<$ & $>$ & $>$ & $<$ & $>$ \\ \hline
+      \textbf{/}       & $<$ & $<$ & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ & $<$ & $>$ & $>$ & $<$ & $>$ \\ \hline
+      \textbf{*}       & $<$ & $<$ & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ & $<$ & $>$ & $>$ & $<$ & $>$ \\ \hline
+      \textbf{-}       & $<$ & $<$ & $<$ & $<$ & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ & $<$ & $>$ & $>$ & $<$ & $>$ \\ \hline
+      \textbf{+}       & $<$ & $<$ & $<$ & $<$ & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ & $<$ & $>$ & $>$ & $<$ & $>$ \\ \hline
+      \textbf{$<$}     & $<$ & $<$ & $<$ & $<$ & $<$ & $<$ &     &     &     &     &     &     & $<$ & $>$ & $>$ & $<$ & $>$ \\ \hline
+      \textbf{$<=$}    & $<$ & $<$ & $<$ & $<$ & $<$ & $<$ &     &     &     &     &     &     & $<$ & $>$ & $>$ & $<$ & $>$ \\ \hline
+      \textbf{$>=$}    & $<$ & $<$ & $<$ & $<$ & $<$ & $<$ &     &     &     &     &     &     & $<$ & $>$ & $>$ & $<$ & $>$ \\ \hline
+      \textbf{$>$}     & $<$ & $<$ & $<$ & $<$ & $<$ & $<$ &     &     &     &     &     &     & $<$ & $>$ & $>$ & $<$ & $>$ \\ \hline
+      \textbf{==}      & $<$ & $<$ & $<$ & $<$ & $<$ & $<$ &     &     &     &     &     &     & $<$ & $>$ & $>$ & $<$ & $>$ \\ \hline
+      \textbf{!=}      & $<$ & $<$ & $<$ & $<$ & $<$ & $<$ &     &     &     &     &     &     & $<$ & $>$ & $>$ & $<$ & $>$ \\ \hline
+      \textbf{(}       & $<$ & $<$ & $<$ & $<$ & $<$ & $<$ & $<$ & $<$ & $<$ & $<$ & $<$ & $<$ & $<$ & $=$ & $<$ & $<$ &     \\ \hline
+      \textbf{)}       &     &     & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ &     & $>$ & $>$ &     & $>$ \\ \hline
+      \textbf{,}       & $<$ & $<$ & $<$ & $<$ & $<$ & $<$ & $<$ & $<$ & $<$ & $<$ & $<$ & $<$ & $<$ & $>$ & $>$ & $<$ &     \\ \hline
+      \textbf{literál} &     &     & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ & $>$ &     & $>$ & $>$ &     & $>$ \\ \hline
+      \textbf{\$}      & $<$ & $<$ & $<$ & $<$ & $<$ & $<$ & $<$ & $<$ & $<$ & $<$ & $<$ & $<$ & $<$ &     &     & $<$ & \$  \\ \hline
+    \end{tabular}%
+  }
+\end{table}
 \section{Popis jednotlivých modulů}
+\subsection{Počáteční funkce překladače (\texttt{main.c})} Ve vstupní funkci se inicializují a spuštějí všechny jednotlivé moduly překladače. Před začátkem překladu se inicializuje lexikální analyzátor pomocí funkce \texttt{lexerStateInit()} a vytvoří se kořen abstraktního syntaktického stromu (\texttt{createTree()}) a následně se vždy strom předá každému modulu a modul se spustí. Vždy se vyhodnotí návratová hodnota každé sekce a rozhodne se zda se má pokračovat v překladu nebo ne.
+
+\subsection{Lexikální analyzátor (\texttt{lexer.c}, \texttt{lexer.h})}
+Implementace lexikálního analyzátoru, obsahuje funkci \texttt{getToken}, která je volána parserem. Čte znaky ze standardního vstupu a vrací strukturu \texttt{Token}, která obsahuje typ tokenu, číslo řádku a případně jeho hodnotu. Při výskytu neplatného lexému nebo chybného odsazení signalizuje lexikální chybu.
+
+\subsection{Dynamický řetězec (\texttt{dynamicString.c}, \texttt{dynamicString.h})}
+Modul pro dynamicky alokovaný řetězec, poskytuje funkce pro inicializaci, přidání znaku na konec řetězce s automatickým zdvojnásobením kapacity při jejím naplnění, vyprázdnění obsahu, porovnání dvou řetězců a uvolnění paměti. Používán lexikálním analyzátorem při načítání identifikátorů, číselných a řetězcových literálů.
+
+\subsection{Syntaktická analýza -- rekurzivní sestup (\texttt{parser.c}, \texttt{parser.h})}
+Rekurzivní sestup pro syntaktickou analýzu je implementován podle pravidel LL(1) gramatiky a její tabulky. Vstupní neterminál je funkce \texttt{parseProg()}, kterou je syntaktická analýza spuštěna. Když narazí na výraz, tak analýza spustí precedenční analýzu a čeká na její zpracování, než bude pokračovat dál. Jednotlivé neterminální funkce vrací typ \texttt{bool}, pokud dojde k syntaktické chybě, tak návratová hodnota je \texttt{false}, jinak \texttt{true}, které se zpropagují až do vstupní funkce. Analýza kontroluje správné pořadí tokenů a návratovou hodnotu funkce \texttt{getToken} z lexikální analýzy. Při chybě zavolá odpovídající funkci z \texttt{error.h}. V průběhu analýzy se generuje abstraktní syntaktický strom, který je potom předáván do dalších modulů.
+
+\subsection{Precedenční analýza (\texttt{precedence.c}, \texttt{precedence.h})}
+Precedenční syntaktická analýza využívá precedenční tabulku (\texttt{prectable.h}) a zásobník podmnožiny terminálů určený pro výrazy. Terminály buď na zásobník přidává nebo redukuje obsah zásobníku podle pravidel. Při redukci se vytvoří odpovídající uzel abstraktního syntaktického stromu. Až je celý výraz zpracován, výsledný uzel se předá zpět do rekurzivního sestupu jako uzel představující celý výraz.
+
+\subsection{Zásobník precedenční analýzy (\texttt{precstack.h}, \texttt{precstack.c})}
+Implementace zásobníku obsahuje standardní zásobníkové funkce \texttt{pop}, \texttt{push} atd. a k nim ještě speciální funkce \texttt{precPushAfterTerminal()}, která vloží terminál před první terminál na zásobníku a funkci \texttt{topTerminal}, která vrací nejvyšší terminál ze zásobníku.
+
+\subsection{Abstraktní syntaktický strom (\texttt{ast.c}, \texttt{ast.h})}
+Implementace stromové struktury zjednodušující strukturu programu, tato struktura slouží ke komunikaci generátoru kódu, syntaktické a sémantické analýzy.
+
+\subsection{Tabulka symbolů (\texttt{symtable.c}, \texttt{symtable.h})}
+Implementuje vyhledávací tabulku, která slouží jako rámec pro ukládání proměnných a jejich vlastností nebo jako tabulka všech funkcí programu.
+
+\subsection{Zásobník tabulek (\texttt{symtableStack.c}, \texttt{symtableStack.h})}
+Ukládá posloupnost tabulek symbolů, slouží pro sémantickou analýzu jako hierarchie rámců, kde první rámec v zásobníku je nejvíce zanořený.
+
+\subsection{Sémantická analýza (\texttt{semantAnalys.c}, \texttt{semantAnalys.h})}
+Provádí průchod nad abstraktním syntaktickým stromem, během kterého kontroluje definice funkcí, typovou kompatibilitu, implicitní rozšiřování, neměnnost konstantních proměnných a formálních parametrů, odvozování návratových typů a doplňuje informace do stromu pro generování kódu.
+
+\subsection{Generátor kódu (\texttt{codegen.c}, \texttt{codegen.h})}
+Prochází abstraktní syntaktický strom a vypisuje výstupní kód IFJcode26 na standardní výstup. Pro zajištění 32 bitů pro datový typ se před definicemi funkcí generují pomocné funkce pro přetékání (\texttt{ifj\$wrap32}), funkce pro ořezání desetinné hodnoty (\texttt{ifj\$clamp32}) a vestavěná funkce \texttt{subStr} (\texttt{ifj\$subStr}).
+
+\subsection{Error (\texttt{error.c}, \texttt{error.h})}
+Ukládá návratový chybový kód, který se vrací na konci programu. Jednotlivé moduly volají funkce, kde se nastaví kód a vypíše řádek ze vstupu, kde chyba nastala a přesnější zprávu.
+
 
 \section{Využití AI při práci na projektu}  
+AI byla využita pro konzultaci ohledně architektury kompilátoru, pro dovysvětlení konceptů z přednášek, pro hledání bugů v kódu, pro zlepšení kvality kódu a refactoring. Také jsme využili AI pro tvorbu rozsáhlých i jednotkových testů na základě našich edge casů. AI bylo také použito pro úpravu a tvorbu některých komentářů. Nebylo však využito při samotném psaní kódu, kromě jedné helper funkce v syntaktické analýze. AI bylo využito také při psaní chybových hlášek pro debugování.
+Při řešení projektu byly použity tyto nástroje: Google Gemini, Claude Code, Visual Studio Code rozšíření ZOO code s propojenými modely přes e-infra.cz. Konkrétně byly použity modely Kimi K3.1 Pro a GLM 5.3.
 
+\section{Citace}
 
+{
+\renewcommand{\section}[2]{}%
+\begin{thebibliography}{9}
+    \bibitem{yigit_sdbm}
+    YIGIT, Ozan. \textit{Hash Functions} [online]. York University, Department of Computer Science [cit. 2026-11-27]. Dostupné z: \url{http://www.cse.yorku.ca/~oz/hash.html}.
+
+    \bibitem{ifj_prednasky}
+    prof. RNDr. Alexandr Meduna, CSc. a Ing. Zbyněk Křivka, Ph.D. \textit{Prezentace k přednáškám v předmětu Formální jazyky a překladače}.
+
+    \bibitem{ijc_tabulka}
+    Implementace vyhledávací tabulky z projektu předmětu IJC.
+\end{thebibliography}
+}
 
 \end{document}
