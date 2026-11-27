@@ -37,21 +37,24 @@ int main() {
         return ERR_INTERNAL;
     }
 
+    // parser
     if (!parseProg(&cur, program)) {
         if (errorReturnValue() == OK) {
-
             errorParser(cur.token.line, "failed to parse input program");
         }
         deleteNode(program);
         freeToken(&cur.token);
-        // po kazde failnute fazi bude potreba vratit error, aby nesel rozbity program dal
         return errorReturnValue();
     }
+
+    // semantic analysis
     uint8_t semantResult = semantAnalyse(program);
     if (semantResult != 0) {
         deleteNode(program);
         return semantResult;
     }
+
+    // generator
     codegenStart(program);
     deleteNode(program);
     return errorReturnValue();
